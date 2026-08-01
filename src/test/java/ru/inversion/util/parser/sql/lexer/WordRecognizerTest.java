@@ -8,7 +8,7 @@ import static org.junit.Assert.assertEquals;
 /**
  * Базовые контрактные тесты SQL lexer-а.
  */
-public class SqlLexerTest_Word {
+public class WordRecognizerTest {
 
     @Test
     public void wordMustBeSingleToken() {

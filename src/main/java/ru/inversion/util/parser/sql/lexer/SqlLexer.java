@@ -1,16 +1,12 @@
 package ru.inversion.util.parser.sql.lexer;
 
-
 import ru.inversion.util.parser.lexer.LexerEngine;
 import ru.inversion.util.parser.lexer.LexerResult;
 import ru.inversion.util.parser.lexer.TokenRecognizer;
+import ru.inversion.util.parser.lexer.recognizer.FixedTextRecognizer;
 import ru.inversion.util.parser.lexer.recognizer.SingleCharacterRecognizer;
 import ru.inversion.util.parser.lexer.recognizer.WhitespaceRecognizer;
-import ru.inversion.util.parser.sql.lexer.recognizer.BlockCommentRecognizer;
-import ru.inversion.util.parser.sql.lexer.recognizer.LineCommentRecognizer;
-import ru.inversion.util.parser.sql.lexer.recognizer.NumberRecognizer;
-import ru.inversion.util.parser.sql.lexer.recognizer.WordRecognizer;
-import ru.inversion.util.parser.sql.lexer.recognizer.StringLiteralRecognizer;
+import ru.inversion.util.parser.sql.lexer.recognizer.*;
 
 import java.util.Arrays;
 import java.util.List;
@@ -22,22 +18,97 @@ public final class SqlLexer {
 
     private final LexerEngine<SqlTokenKind> engine;
 
-    public SqlLexer()
-    {
+    public SqlLexer() {
         List<TokenRecognizer<SqlTokenKind>> recognizers = Arrays.asList(
-            new WhitespaceRecognizer<>( SqlTokenKind.WHITESPACE ),
+            new WhitespaceRecognizer<SqlTokenKind>( SqlTokenKind.WHITESPACE ),
+
             new LineCommentRecognizer(),
             new BlockCommentRecognizer(),
+
             new StringLiteralRecognizer(),
+            new QuotedIdentifierRecognizer(),
+
+            new JdbcParameterRecognizer(),
+            new NamedParameterRecognizer(),
+            new PostgresPositionalParameterRecognizer(),
+
             new NumberRecognizer(),
-            new WordRecognizer()
+            new WordRecognizer(),
+
+            new OperatorRecognizer(
+                /*
+                 * Операторы из трёх символов.
+                 */
+                "->>",
+                "#>>",
+                "!~*",
+
+                /*
+                 * Операторы из двух символов.
+                 */
+                "<=",
+                ">=",
+                "<>",
+                "!=",
+                "||",
+                "&&",
+                "<<",
+                ">>",
+                "::",
+                ":=",
+                "->",
+                "#>",
+                "#-",
+                "@>",
+                "<@",
+                "~*",
+                "!~",
+                "@@",
+                "@?",
+                "!<",
+                "!>",
+
+                /*
+                 * Операторы из одного символа.
+                 */
+                "+",
+                "-",
+                "*",
+                "/",
+                "%",
+                "=",
+                "<",
+                ">",
+                "&",
+                "|",
+                "^",
+                "~"
+            ),
+
+            fixed("(", SqlTokenKind.LEFT_PARENTHESIS),
+            fixed(")", SqlTokenKind.RIGHT_PARENTHESIS),
+
+            fixed("[", SqlTokenKind.LEFT_BRACKET),
+            fixed("]", SqlTokenKind.RIGHT_BRACKET),
+
+            fixed("{", SqlTokenKind.LEFT_BRACE),
+            fixed("}", SqlTokenKind.RIGHT_BRACE),
+
+            fixed(",", SqlTokenKind.COMMA),
+            fixed(".", SqlTokenKind.DOT),
+            fixed(";", SqlTokenKind.SEMICOLON)
         );
-        this.engine = new LexerEngine<>( recognizers, new SingleCharacterRecognizer<>(SqlTokenKind.UNKNOWN), SqlTokenKind.END_OF_FILE );
+
+        this.engine = new LexerEngine<>( recognizers, new SingleCharacterRecognizer<>( SqlTokenKind.UNKNOWN ), SqlTokenKind.END_OF_FILE );
     }
 
-    /** */
     public LexerResult<SqlTokenKind> tokenize( CharSequence source )
     {
         return engine.tokenize(source);
+    }
+
+    private static TokenRecognizer<SqlTokenKind> fixed( String text, SqlTokenKind kind )
+    {
+        return new FixedTextRecognizer<>( text, kind );
     }
 }

@@ -10,7 +10,7 @@ import static org.junit.Assert.assertEquals;
 /**
  * Базовые контрактные тесты SQL lexer-а.
  */
-public class SqlLexerTest_Str {
+public class StringLiteralRecognizerTest {
 
     @Test
     public void emptyStringMustBeSingleToken() {
