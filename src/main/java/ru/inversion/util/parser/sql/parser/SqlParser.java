@@ -12,20 +12,15 @@ public final class SqlParser {
 
     private final SqlTokenCursor cursor;
     private final DiagnosticBag diagnostics;
+    private final LexerResult<SqlTokenKind> lexerResult;
 
     public SqlParser(CharSequence source)
     {
         Objects.requireNonNull(source, "source");
 
-        LexerResult<SqlTokenKind> lexerResult = new SqlLexer().tokenize(source);
-
+        this.lexerResult = new SqlLexer().tokenize(source);
         this.cursor      = new SqlTokenCursor(lexerResult);
         this.diagnostics = new DiagnosticBag();
-    }
-
-    /** */
-    public DiagnosticBag diagnostics() {
-        return diagnostics;
     }
 
     /**
@@ -100,5 +95,9 @@ public final class SqlParser {
                 + " \""
                 + cursor.result().text(token)
                 + "\"";
+    }
+
+    private <T> SqlParseResult<T> result(T root) {
+        return new SqlParseResult<T>( lexerResult, root, diagnostics.diagnostics() );
     }
 }
