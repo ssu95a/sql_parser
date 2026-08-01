@@ -118,10 +118,12 @@ public final class LexerEngine<K extends TokenKind> {
         if( bestMatch != null )
             return bestMatch;
 
-        TokenMatch<K> fallbackMatch = invokeRecognizer( fallbackRecognizer, source, offset);
+        TokenMatch<K> fallbackMatch = invokeRecognizer(fallbackRecognizer, source, offset);
 
-        if (fallbackMatch == null)
+        if( fallbackMatch == null)
             throw lexerError( source, offset, "Fallback recognizer returned null" );
+
+        validateMatch(source, offset, fallbackMatch);
 
         return fallbackMatch;
     }
