@@ -15,7 +15,7 @@ import ru.inversion.util.parser.text.TextRange;
  *
  * @param <K> тип категорий токенов, например SqlTokenKind
  */
-public final class LexerEngine<K> {
+public final class LexerEngine<K extends TokenKind> {
 
     private static final int ERROR_CONTEXT_RADIUS = 40;
 
@@ -59,7 +59,7 @@ public final class LexerEngine<K> {
     /**
      * Удобный overload для CharSequence.
      */
-    public List<Token<K>> tokenize(CharSequence text) {
+    public LexerResult<K> tokenize(CharSequence text) {
         return tokenize(new SourceText(text));
     }
 
@@ -69,29 +69,25 @@ public final class LexerEngine<K> {
      * Если recognizer-ы корректны, конкатенация текстов всех токенов,
      * кроме EOF, должна быть равна исходному тексту.
      */
-    public List<Token<K>> tokenize(SourceText source) {
+    public LexerResult<K> tokenize(SourceText source) {
+
         Objects.requireNonNull(source, "source");
 
-        List<Token<K>> result = new ArrayList<Token<K>>();
+        List<Token<K>> tokens = new ArrayList<>();
         int offset = 0;
 
-        while (offset < source.length()) {
+        while( offset < source.length())
+        {
             TokenMatch<K> match = findBestMatch(source, offset);
-
             validateMatch(source, offset, match);
-
-            result.add(new Token<K>(
-                    (TokenKind) match.kind(),
-                    new TextRange(offset, match.endOffset())
-            ));
-
+            tokens.add(new Token<>( match.kind(), new TextRange(offset, match.endOffset()) ));
             offset = match.endOffset();
         }
 
         if(endOfFileKind != null)
-            result.add(new Token<K>( endOfFileKind, new TextRange(source.length(), source.length()) ));
+            tokens.add(new Token<K>( endOfFileKind, new TextRange(source.length(), source.length()) ));
 
-        return result;
+        return new LexerResult<K>(source, tokens);
     }
 
     /**

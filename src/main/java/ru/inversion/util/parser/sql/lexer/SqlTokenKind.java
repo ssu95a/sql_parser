@@ -1,13 +1,15 @@
-package ru.inversion.util.parser.lexer;
+package ru.inversion.util.parser.sql.lexer;
+
+import ru.inversion.util.parser.lexer.TokenKind;
 
 /**
- * <h5>Лексические категории SQL.</h5>
- * <p>
- * Здесь нет грамматических сущностей SELECT, FROM, WHERE, ORDER BY.
- * Конкретные ключевые слова распознаются как KEYWORD, а их значение
- * определяется по диапазону в SourceText.
+ * Лексические категории SQL.
+ *
+ * Здесь нет грамматических сущностей SELECT, FROM, WHERE и ORDER BY.
+ * Обычные слова возвращаются как WORD. Их грамматическое значение
+ * определяет parser с учётом контекста и SQL-диалекта.
  */
-public enum SqlTokenKind {
+public enum SqlTokenKind implements TokenKind {
 
     /**
      * Синтетический токен конца текста.
@@ -64,19 +66,6 @@ public enum SqlTokenKind {
      *   "Column Name"
      */
     QUOTED_IDENTIFIER(false, false, false),
-
-    /**
-     * Любое распознанное ключевое слово:
-     *
-     *   SELECT
-     *   FROM
-     *   WHERE
-     *   ORDER
-     *   BY
-     *
-     * Lexer не объединяет ORDER BY в один токен.
-     */
-    KEYWORD(false, false, false),
 
     /*
      * Литералы.

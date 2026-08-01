@@ -47,10 +47,6 @@ public final class SourceText implements CharSequence {
         return text.substring(start,end);
     }
 
-    public String text(int start, int end) {
-        return text.substring(start, end);
-    }
-
     /** */
     public void appendTo( StringBuilder target, int start, int end )
     {

@@ -8,10 +8,10 @@ import ru.inversion.util.parser.text.SourceText;
  *
  * Реализация не должна изменять SourceText или внешнее состояние.
  */
-public interface TokenRecognizer<K> {
+public interface TokenRecognizer<K extends TokenKind> {
 
     /**
-     * @return совпадение либо null, если правило не применимо.
+     * Возвращает совпадение либо null, если правило неприменимо.
      */
-    TokenMatch<K> match( SourceText source, int offset );
+    TokenMatch<K> match(SourceText source, int offset);
 }

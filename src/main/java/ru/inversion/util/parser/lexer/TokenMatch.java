@@ -6,7 +6,7 @@ import java.util.Objects;
 /**
  * Внутренний результат работы TokenRecognizer.
  */
-public final class TokenMatch<K> {
+public final class TokenMatch<K extends TokenKind> {
 
     private final K kind;
     private final int endOffset;

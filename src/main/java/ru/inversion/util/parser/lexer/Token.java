@@ -3,25 +3,22 @@ package ru.inversion.util.parser.lexer;
 import ru.inversion.util.parser.text.SourceText;
 import ru.inversion.util.parser.text.TextRange;
 
-public final class Token<K> {
+import java.util.Objects;
 
-    private final TokenKind kind;
+/**
+ * Один непрерывный лексический фрагмент исходного текста.
+ */
+public final class Token<K extends TokenKind> {
+
+    private final K kind;
     private final TextRange range;
 
-    public Token(TokenKind kind, TextRange range) {
-        if (kind == null) {
-            throw new IllegalArgumentException("kind is null");
-        }
-
-        if (range == null) {
-            throw new IllegalArgumentException("range is null");
-        }
-
-        this.kind = kind;
-        this.range = range;
+    public Token(K kind, TextRange range) {
+        this.kind = Objects.requireNonNull(kind, "kind");
+        this.range = Objects.requireNonNull(range, "range");
     }
 
-    public TokenKind kind() {
+    public K kind() {
         return kind;
     }
 
@@ -30,7 +27,12 @@ public final class Token<K> {
     }
 
     public String text(SourceText source) {
-        return source.substring(range.start(), range.end());
+        Objects.requireNonNull(source, "source");
+
+        return source.substring(
+                range.start(),
+                range.end()
+        );
     }
 
     @Override
