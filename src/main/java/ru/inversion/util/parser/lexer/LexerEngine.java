@@ -92,7 +92,7 @@ public final class LexerEngine<K extends TokenKind> {
 
     /**
      * Ищет самое длинное совпадение.
-     *
+     * <p>
      * При равной длине остаётся первое найденное правило.
      */
     private TokenMatch<K> findBestMatch(
@@ -109,26 +109,19 @@ public final class LexerEngine<K extends TokenKind> {
                 continue;
             }
 
-            if (bestMatch == null
-                    || candidate.endOffset() > bestMatch.endOffset()) {
+            validateMatch(source, offset, candidate);
+
+            if( bestMatch == null || candidate.endOffset() > bestMatch.endOffset() )
                 bestMatch = candidate;
-            }
         }
 
-        if (bestMatch != null) {
+        if( bestMatch != null )
             return bestMatch;
-        }
 
-        TokenMatch<K> fallbackMatch =
-                invokeRecognizer(fallbackRecognizer, source, offset);
+        TokenMatch<K> fallbackMatch = invokeRecognizer( fallbackRecognizer, source, offset);
 
-        if (fallbackMatch == null) {
-            throw lexerError(
-                    source,
-                    offset,
-                    "Fallback recognizer returned null"
-            );
-        }
+        if (fallbackMatch == null)
+            throw lexerError( source, offset, "Fallback recognizer returned null" );
 
         return fallbackMatch;
     }

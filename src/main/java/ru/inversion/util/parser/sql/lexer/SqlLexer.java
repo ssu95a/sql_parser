@@ -6,6 +6,9 @@ import ru.inversion.util.parser.lexer.LexerResult;
 import ru.inversion.util.parser.lexer.TokenRecognizer;
 import ru.inversion.util.parser.lexer.recognizer.SingleCharacterRecognizer;
 import ru.inversion.util.parser.lexer.recognizer.WhitespaceRecognizer;
+import ru.inversion.util.parser.sql.lexer.recognizer.BlockCommentRecognizer;
+import ru.inversion.util.parser.sql.lexer.recognizer.LineCommentRecognizer;
+import ru.inversion.util.parser.sql.lexer.recognizer.WordRecognizer;
 
 import java.util.Arrays;
 import java.util.List;
@@ -19,7 +22,12 @@ public final class SqlLexer {
 
     public SqlLexer()
     {
-        List<TokenRecognizer<SqlTokenKind>> recognizers = Arrays.asList( new WhitespaceRecognizer() );
+        List<TokenRecognizer<SqlTokenKind>> recognizers = Arrays.asList(
+            new WhitespaceRecognizer<>( SqlTokenKind.WHITESPACE ),
+            new LineCommentRecognizer(),
+            new BlockCommentRecognizer(),
+            new WordRecognizer()
+        );
         this.engine = new LexerEngine<>( recognizers, new SingleCharacterRecognizer<>(SqlTokenKind.UNKNOWN), SqlTokenKind.END_OF_FILE );
     }
 
