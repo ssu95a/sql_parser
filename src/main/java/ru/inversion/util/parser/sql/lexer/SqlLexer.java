@@ -20,7 +20,7 @@ public final class SqlLexer {
 
     public SqlLexer() {
         List<TokenRecognizer<SqlTokenKind>> recognizers = Arrays.asList(
-            new WhitespaceRecognizer<SqlTokenKind>( SqlTokenKind.WHITESPACE ),
+            new WhitespaceRecognizer<>( SqlTokenKind.WHITESPACE ),
 
             new LineCommentRecognizer(),
             new BlockCommentRecognizer(),

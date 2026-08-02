@@ -3,24 +3,25 @@ package ru.inversion.util.parser.sql.ast;
 import ru.inversion.util.parser.lexer.Token;
 import ru.inversion.util.parser.sql.lexer.SqlTokenKind;
 
-import java.util.function.Predicate;
-
 /**
- * SQL-параметр:
- *
- *   ?
- *   :name
- *   $1
+ * SQL-параметр: ?, :name или $1.
  */
-public final class ParameterExpression extends TokenExpression {
+public final class ParameterExpression
+        extends TokenExpression {
 
-    public ParameterExpression( Token<SqlTokenKind> token )
-    {
-        super(token, sqlTokenKind -> {
-            if (!sqlTokenKind.isParameter())
-                throw new IllegalArgumentException( "Token is not a parameter: " + token.kind() );
-        });
+    public ParameterExpression(
+            Token<SqlTokenKind> token
+    ) {
+        super(token, ParameterExpression::checkParameter);
     }
 
-    public SqlTokenKind parameterKind() { return tokenKind(); }
+    public SqlTokenKind parameterKind() {
+        return tokenKind();
+    }
+
+    private static void checkParameter( SqlTokenKind kind )
+    {
+        if( !kind.isParameter() )
+            throw new IllegalArgumentException( "Token is not a parameter: " + kind );
+    }
 }

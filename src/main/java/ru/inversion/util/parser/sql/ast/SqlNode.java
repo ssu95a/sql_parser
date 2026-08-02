@@ -17,7 +17,7 @@ public abstract class SqlNode {
 
     private final TextRange range;
 
-    protected SqlNode(TextRange range) {
+    protected SqlNode( TextRange range ) {
         this.range = Objects.requireNonNull(range, "range");
     }
 
