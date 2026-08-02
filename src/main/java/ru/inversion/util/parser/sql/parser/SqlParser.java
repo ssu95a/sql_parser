@@ -6,9 +6,9 @@ import ru.inversion.util.parser.lexer.Token;
 import ru.inversion.util.parser.sql.ast.*;
 import ru.inversion.util.parser.sql.lexer.SqlLexer;
 import ru.inversion.util.parser.sql.lexer.SqlTokenKind;
-import ru.inversion.util.parser.sql.ast.UnaryExpression;
-import ru.inversion.util.parser.sql.ast.BinaryExpression;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 
 public final class SqlParser {
@@ -131,6 +131,7 @@ public final class SqlParser {
         return parseBinaryExpression(0);
     }
 
+    /** */
     private SqlExpression parsePrimaryExpression() {
         Token<SqlTokenKind> token =
                 cursor.current();
@@ -152,10 +153,8 @@ public final class SqlParser {
             return new ParameterExpression(token);
         }
 
-        if (kind == SqlTokenKind.WORD
-                || kind == SqlTokenKind.QUOTED_IDENTIFIER) {
-            cursor.consume();
-            return new NameExpression(token);
+        if (isNameKind(kind)) {
+            return parseNameExpression();
         }
 
         diagnostics.error(
@@ -169,12 +168,81 @@ public final class SqlParser {
          * Обеспечиваем продвижение при ошибке.
          * EOF остаётся на месте.
          */
-        if (!cursor.isEnd()) {
+        if( !isExpressionBoundary() )
             cursor.consume();
-        }
 
         return null;
     }
+
+
+    private SqlExpression parseNameExpression() {
+        List<NameExpression> parts =
+                new ArrayList<NameExpression>();
+
+        List<Token<SqlTokenKind>> dots =
+                new ArrayList<Token<SqlTokenKind>>();
+
+        parts.add(
+                new NameExpression(cursor.consume())
+        );
+
+        while (cursor.is(SqlTokenKind.DOT)) {
+            Token<SqlTokenKind> dot =
+                    cursor.consume();
+
+            dots.add(dot);
+
+            Token<SqlTokenKind> actual =
+                    cursor.current();
+
+            if (!isNameKind(actual.kind())) {
+                diagnostics.error(
+                        SqlDiagnosticCodes.EXPECTED_NAME,
+                        actual.range(),
+                        "Ожидалось имя после точки, найден "
+                                + describe(actual)
+                );
+
+                /*
+                 * Не поглощаем границы окружающей конструкции.
+                 * Например, ')' должен обработать parser скобок.
+                 */
+                if (!isExpressionBoundary()) {
+                    cursor.consume();
+                }
+
+                break;
+            }
+
+            parts.add(
+                    new NameExpression(cursor.consume())
+            );
+        }
+
+        if (dots.isEmpty()) {
+            return parts.get(0);
+        }
+
+        return new QualifiedNameExpression(
+                parts,
+                dots
+        );
+    }
+
+    private boolean isNameKind(
+            SqlTokenKind kind
+    ) {
+        return kind == SqlTokenKind.WORD
+                || kind
+                == SqlTokenKind.QUOTED_IDENTIFIER;
+    }
+
+    /** */
+    private boolean isExpressionBoundary()
+    {
+        return cursor.isEnd() || cursor.is( SqlTokenKind.RIGHT_PARENTHESIS ) || cursor.is(SqlTokenKind.COMMA) || cursor.is(SqlTokenKind.SEMICOLON);
+    }
+
 
     private SqlExpression parseParenthesizedExpression() {
         Token<SqlTokenKind> leftParenthesis =
@@ -236,7 +304,7 @@ public final class SqlParser {
 
     private SqlExpression parseUnaryExpression() {
         if (!isUnaryOperator()) {
-            return parsePrimaryExpression();
+            return parsePostfixExpression();
         }
 
         Token<SqlTokenKind> operator =
@@ -372,5 +440,317 @@ public final class SqlParser {
         }
 
         return -1;
+    }
+
+    private SqlExpression parsePostfixExpression() {
+        SqlExpression expression =
+                parsePrimaryExpression();
+
+        if (expression == null) {
+            return null;
+        }
+
+        while (cursor.is(
+                SqlTokenKind.LEFT_PARENTHESIS
+        )) {
+            expression =
+                    parseCallExpression(expression);
+        }
+
+        return expression;
+    }
+
+    private CallExpression parseCallExpression(
+            SqlExpression callee
+    ) {
+        Token<SqlTokenKind> leftParenthesis =
+                cursor.consume();
+
+        List<SqlExpression> arguments =
+                new ArrayList<SqlExpression>();
+
+        List<Token<SqlTokenKind>> commas =
+                new ArrayList<Token<SqlTokenKind>>();
+
+        Token<SqlTokenKind> rightParenthesis =
+                null;
+
+        /*
+         * Вызов без аргументов:
+         *
+         *   function()
+         */
+        if (cursor.is(
+                SqlTokenKind.RIGHT_PARENTHESIS
+        )) {
+            rightParenthesis =
+                    cursor.consume();
+
+            return new CallExpression(
+                    callee,
+                    leftParenthesis,
+                    arguments,
+                    commas,
+                    rightParenthesis
+            );
+        }
+
+        while (true) {
+            /*
+             * Здесь parser ожидает очередной аргумент.
+             */
+            if (cursor.isEnd()
+                    || cursor.is(
+                    SqlTokenKind.SEMICOLON
+            )) {
+
+                Token<SqlTokenKind> actual =
+                        cursor.current();
+
+                diagnostics.error(
+                        SqlDiagnosticCodes.EXPECTED_ARGUMENT,
+                        actual.range(),
+                        "Ожидался аргумент функции, найден "
+                                + describe(actual)
+                );
+
+                break;
+            }
+
+            /*
+             * Лишняя или ведущая запятая:
+             *
+             *   function(,a)
+             *   function(a,,b)
+             *
+             * Такая запятая не сохраняется в AST, поскольку
+             * перед ней отсутствует аргумент.
+             */
+            if (cursor.is(SqlTokenKind.COMMA)) {
+                Token<SqlTokenKind> actual =
+                        cursor.consume();
+
+                diagnostics.error(
+                        SqlDiagnosticCodes.EXPECTED_ARGUMENT,
+                        actual.range(),
+                        "Ожидался аргумент функции, найден "
+                                + describe(actual)
+                );
+
+                if (cursor.is(
+                        SqlTokenKind.RIGHT_PARENTHESIS
+                )) {
+                    rightParenthesis =
+                            cursor.consume();
+
+                    break;
+                }
+
+                continue;
+            }
+
+            /*
+             * Скобка могла сохраниться после ошибки внутри
+             * выражения аргумента.
+             */
+            if (cursor.is(
+                    SqlTokenKind.RIGHT_PARENTHESIS
+            )) {
+                rightParenthesis =
+                        cursor.consume();
+
+                break;
+            }
+
+            SqlExpression argument =
+                    parseExpressionCore();
+
+            if (argument == null) {
+                /*
+                 * parseExpressionCore() либо продвинул курсор,
+                 * либо оставил его на границе списка.
+                 */
+                if (cursor.is(
+                        SqlTokenKind.RIGHT_PARENTHESIS
+                )) {
+                    rightParenthesis =
+                            cursor.consume();
+
+                    break;
+                }
+
+                if (cursor.isEnd()
+                        || cursor.is(
+                        SqlTokenKind.SEMICOLON
+                )) {
+                    break;
+                }
+
+                continue;
+            }
+
+            arguments.add(argument);
+
+            /*
+             * Следующий аргумент.
+             */
+            if (cursor.is(SqlTokenKind.COMMA)) {
+                Token<SqlTokenKind> comma =
+                        cursor.consume();
+
+                commas.add(comma);
+
+                /*
+                 * Завершающая запятая:
+                 *
+                 *   function(a,)
+                 *   function(a,
+                 */
+                if (cursor.is(
+                        SqlTokenKind.RIGHT_PARENTHESIS
+                ) || cursor.isEnd()
+                        || cursor.is(
+                        SqlTokenKind.SEMICOLON
+                )) {
+
+                    Token<SqlTokenKind> actual =
+                            cursor.current();
+
+                    diagnostics.error(
+                            SqlDiagnosticCodes.EXPECTED_ARGUMENT,
+                            actual.range(),
+                            "Ожидался аргумент после запятой, найден "
+                                    + describe(actual)
+                    );
+
+                    if (cursor.is(
+                            SqlTokenKind.RIGHT_PARENTHESIS
+                    )) {
+                        rightParenthesis =
+                                cursor.consume();
+                    }
+
+                    break;
+                }
+
+                continue;
+            }
+
+            /*
+             * Нормальное завершение вызова.
+             */
+            if (cursor.is(
+                    SqlTokenKind.RIGHT_PARENTHESIS
+            )) {
+                rightParenthesis =
+                        cursor.consume();
+
+                break;
+            }
+
+            /*
+             * Незакрытый вызов:
+             *
+             *   function(argument
+             */
+            if (cursor.isEnd()
+                    || cursor.is(
+                    SqlTokenKind.SEMICOLON
+            )) {
+
+                Token<SqlTokenKind> actual =
+                        cursor.current();
+
+                diagnostics.error(
+                        SqlDiagnosticCodes
+                                .EXPECTED_COMMA_OR_RIGHT_PARENTHESIS,
+                        actual.range(),
+                        "Ожидалась запятая или закрывающая скобка, найден "
+                                + describe(actual)
+                );
+
+                break;
+            }
+
+            /*
+             * Между аргументами нет запятой:
+             *
+             *   function(a b)
+             */
+            Token<SqlTokenKind> actual =
+                    cursor.current();
+
+            diagnostics.error(
+                    SqlDiagnosticCodes
+                            .EXPECTED_COMMA_OR_RIGHT_PARENTHESIS,
+                    actual.range(),
+                    "Ожидалась запятая или закрывающая скобка, найден "
+                            + describe(actual)
+            );
+
+            synchronizeCallArguments();
+
+            if (cursor.is(SqlTokenKind.COMMA)) {
+                commas.add(cursor.consume());
+
+                if (cursor.is(
+                        SqlTokenKind.RIGHT_PARENTHESIS
+                ) || cursor.isEnd()
+                        || cursor.is(
+                        SqlTokenKind.SEMICOLON
+                )) {
+
+                    Token<SqlTokenKind> boundary =
+                            cursor.current();
+
+                    diagnostics.error(
+                            SqlDiagnosticCodes.EXPECTED_ARGUMENT,
+                            boundary.range(),
+                            "Ожидался аргумент после запятой, найден "
+                                    + describe(boundary)
+                    );
+
+                    if (cursor.is(
+                            SqlTokenKind.RIGHT_PARENTHESIS
+                    )) {
+                        rightParenthesis =
+                                cursor.consume();
+                    }
+
+                    break;
+                }
+
+                continue;
+            }
+
+            if (cursor.is(
+                    SqlTokenKind.RIGHT_PARENTHESIS
+            )) {
+                rightParenthesis =
+                        cursor.consume();
+            }
+
+            break;
+        }
+
+        return new CallExpression(
+                callee,
+                leftParenthesis,
+                arguments,
+                commas,
+                rightParenthesis
+        );
+    }
+    private void synchronizeCallArguments() {
+        while (!cursor.isEnd()
+                && !cursor.is(SqlTokenKind.COMMA)
+                && !cursor.is(
+                SqlTokenKind.RIGHT_PARENTHESIS
+        )
+                && !cursor.is(
+                SqlTokenKind.SEMICOLON
+        )) {
+            cursor.consume();
+        }
     }
 }

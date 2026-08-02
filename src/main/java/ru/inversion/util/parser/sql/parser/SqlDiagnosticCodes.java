@@ -18,6 +18,13 @@ public final class SqlDiagnosticCodes {
 
     public static final String EXPECTED_RIGHT_PARENTHESIS = "SQL005";
 
+    public static final String EXPECTED_NAME = "SQL006";
+
+    public static final String EXPECTED_ARGUMENT =
+            "SQL007";
+
+    public static final String EXPECTED_COMMA_OR_RIGHT_PARENTHESIS =
+            "SQL008";
     private SqlDiagnosticCodes() {
     }
 }

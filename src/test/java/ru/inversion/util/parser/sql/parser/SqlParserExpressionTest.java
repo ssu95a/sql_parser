@@ -11,6 +11,8 @@ import ru.inversion.util.parser.sql.ast.SqlExpression;
 import ru.inversion.util.parser.sql.ast.UnaryExpression;
 import ru.inversion.util.parser.sql.lexer.SqlTokenKind;
 import ru.inversion.util.parser.text.TextRange;
+import ru.inversion.util.parser.sql.ast.QualifiedNameExpression;
+import ru.inversion.util.parser.sql.ast.CallExpression;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -869,5 +871,430 @@ public class SqlParserExpressionTest {
     ) {
         return new SqlParser(sql)
                 .parseExpression();
+    }
+
+    @Test
+    public void qualifiedNameMustBeParsed() {
+        SqlParseResult<SqlExpression> result =
+                parse("schema.table");
+
+        assertTrue(result.isSuccessful());
+        assertTrue(
+                result.root()
+                        instanceof QualifiedNameExpression
+        );
+
+        QualifiedNameExpression expression =
+                (QualifiedNameExpression) result.root();
+
+        assertEquals(2, expression.partCount());
+        assertEquals(1, expression.dots().size());
+        assertTrue(expression.isComplete());
+
+        assertEquals(
+                new TextRange(0, 12),
+                expression.range()
+        );
+
+        assertEquals(
+                "schema",
+                result.lexerResult().text(
+                        expression.parts()
+                                .get(0)
+                                .token()
+                )
+        );
+
+        assertEquals(
+                "table",
+                result.lexerResult().text(
+                        expression.parts()
+                                .get(1)
+                                .token()
+                )
+        );
+    }
+
+    @Test
+    public void threePartQualifiedNameMustBeParsed() {
+        SqlParseResult<SqlExpression> result =
+                parse("catalog.schema.table");
+
+        assertTrue(result.isSuccessful());
+
+        QualifiedNameExpression expression =
+                (QualifiedNameExpression) result.root();
+
+        assertEquals(3, expression.partCount());
+        assertEquals(2, expression.dots().size());
+
+        assertEquals(
+                new TextRange(0, 20),
+                expression.range()
+        );
+    }
+
+    @Test
+    public void quotedQualifiedNameMustBeParsed() {
+        SqlParseResult<SqlExpression> result =
+                parse("\"Some Schema\".\"Some Table\"");
+
+        assertTrue(result.isSuccessful());
+
+        QualifiedNameExpression expression =
+                (QualifiedNameExpression) result.root();
+
+        assertEquals(2, expression.partCount());
+
+        assertTrue(
+                expression.parts()
+                        .get(0)
+                        .isQuoted()
+        );
+
+        assertTrue(
+                expression.parts()
+                        .get(1)
+                        .isQuoted()
+        );
+    }
+
+    @Test
+    public void simpleNameMustNotBecomeQualifiedName() {
+        SqlParseResult<SqlExpression> result =
+                parse("table");
+
+        assertTrue(result.isSuccessful());
+        assertTrue(
+                result.root()
+                        instanceof NameExpression
+        );
+    }
+
+    @Test
+    public void qualifiedNameMayBeUsedInBinaryExpression() {
+        SqlParseResult<SqlExpression> result =
+                parse("customer.id = :id");
+
+        assertTrue(result.isSuccessful());
+        assertTrue(
+                result.root()
+                        instanceof BinaryExpression
+        );
+
+        BinaryExpression comparison =
+                (BinaryExpression) result.root();
+
+        assertTrue(
+                comparison.left()
+                        instanceof QualifiedNameExpression
+        );
+
+        assertTrue(
+                comparison.right()
+                        instanceof ParameterExpression
+        );
+    }
+
+    @Test
+    public void trailingDotMustProducePartialQualifiedName() {
+        SqlParseResult<SqlExpression> result =
+                parse("schema.");
+
+        assertTrue(result.hasRoot());
+        assertTrue(result.hasErrors());
+        assertFalse(result.isSuccessful());
+
+        assertTrue(
+                result.root()
+                        instanceof QualifiedNameExpression
+        );
+
+        QualifiedNameExpression expression =
+                (QualifiedNameExpression) result.root();
+
+        assertTrue(expression.hasTrailingDot());
+        assertFalse(expression.isComplete());
+
+        assertEquals(1, expression.partCount());
+        assertEquals(1, expression.dots().size());
+
+        assertEquals(
+                new TextRange(0, 7),
+                expression.range()
+        );
+
+        assertEquals(1, result.diagnostics().size());
+
+        assertEquals(
+                SqlDiagnosticCodes.EXPECTED_NAME,
+                result.diagnostics().get(0).code()
+        );
+
+        assertEquals(
+                new TextRange(7, 7),
+                result.diagnostics().get(0).range()
+        );
+    }
+
+    @Test
+    public void missingNameBeforeParenthesisMustPreserveParenthesis() {
+        SqlParseResult<SqlExpression> result =
+                parse("(schema.)");
+
+        assertTrue(result.hasRoot());
+        assertTrue(result.hasErrors());
+        assertEquals(1, result.diagnostics().size());
+
+        ParenthesizedExpression parentheses =
+                (ParenthesizedExpression) result.root();
+
+        assertTrue(parentheses.hasRightParenthesis());
+
+        assertTrue(
+                parentheses.expression()
+                        instanceof QualifiedNameExpression
+        );
+
+        QualifiedNameExpression name =
+                (QualifiedNameExpression)
+                        parentheses.expression();
+
+        assertTrue(name.hasTrailingDot());
+
+        assertEquals(
+                SqlDiagnosticCodes.EXPECTED_NAME,
+                result.diagnostics().get(0).code()
+        );
+
+        assertEquals(
+                new TextRange(8, 9),
+                result.diagnostics().get(0).range()
+        );
+    }
+
+    @Test
+    public void callWithoutArgumentsMustBeParsed() {
+        SqlParseResult<SqlExpression> result =
+                parse("now()");
+
+        assertTrue(result.isSuccessful());
+        assertTrue(
+                result.root()
+                        instanceof CallExpression
+        );
+
+        CallExpression call =
+                (CallExpression) result.root();
+
+        assertTrue(
+                call.callee()
+                        instanceof NameExpression
+        );
+
+        assertEquals(0, call.argumentCount());
+        assertTrue(call.hasRightParenthesis());
+        assertFalse(call.hasTrailingComma());
+
+        assertEquals(
+                new TextRange(0, 5),
+                call.range()
+        );
+    }
+
+    @Test
+    public void callWithArgumentsMustBeParsed() {
+        SqlParseResult<SqlExpression> result =
+                parse("coalesce(a, b + 1, -c)");
+
+        assertTrue(result.isSuccessful());
+
+        CallExpression call =
+                (CallExpression) result.root();
+
+        assertEquals(3, call.argumentCount());
+        assertEquals(2, call.commas().size());
+
+        assertTrue(
+                call.arguments().get(0)
+                        instanceof NameExpression
+        );
+
+        assertTrue(
+                call.arguments().get(1)
+                        instanceof BinaryExpression
+        );
+
+        assertTrue(
+                call.arguments().get(2)
+                        instanceof UnaryExpression
+        );
+    }
+
+    @Test
+    public void qualifiedNameMayBeCalled() {
+        SqlParseResult<SqlExpression> result =
+                parse("schema.calculate_tax(price)");
+
+        assertTrue(result.isSuccessful());
+
+        CallExpression call =
+                (CallExpression) result.root();
+
+        assertTrue(
+                call.callee()
+                        instanceof QualifiedNameExpression
+        );
+
+        assertEquals(1, call.argumentCount());
+    }
+
+    @Test
+    public void callMayBeUsedInBinaryExpression() {
+        SqlParseResult<SqlExpression> result =
+                parse("sum(price) + tax");
+
+        assertTrue(result.isSuccessful());
+
+        BinaryExpression addition =
+                (BinaryExpression) result.root();
+
+        assertTrue(
+                addition.left()
+                        instanceof CallExpression
+        );
+
+        assertTrue(
+                addition.right()
+                        instanceof NameExpression
+        );
+    }
+
+    @Test
+    public void nestedCallMustBeParsed() {
+        SqlParseResult<SqlExpression> result =
+                parse("outer(inner(value))");
+
+        assertTrue(result.isSuccessful());
+
+        CallExpression outer =
+                (CallExpression) result.root();
+
+        assertEquals(1, outer.argumentCount());
+
+        assertTrue(
+                outer.arguments().get(0)
+                        instanceof CallExpression
+        );
+
+        CallExpression inner =
+                (CallExpression)
+                        outer.arguments().get(0);
+
+        assertEquals(1, inner.argumentCount());
+    }
+
+    @Test
+    public void missingCallRightParenthesisMustProducePartialAst() {
+        SqlParseResult<SqlExpression> result =
+                parse("sum(price");
+
+        assertTrue(result.hasRoot());
+        assertTrue(result.hasErrors());
+        assertFalse(result.isSuccessful());
+
+        CallExpression call =
+                (CallExpression) result.root();
+
+        assertEquals(1, call.argumentCount());
+        assertFalse(call.hasRightParenthesis());
+
+        assertEquals(
+                SqlDiagnosticCodes
+                        .EXPECTED_COMMA_OR_RIGHT_PARENTHESIS,
+                result.diagnostics().get(0).code()
+        );
+
+        assertEquals(
+                new TextRange(9, 9),
+                result.diagnostics().get(0).range()
+        );
+    }
+
+    @Test
+    public void trailingCallCommaMustProduceDiagnostic() {
+        SqlParseResult<SqlExpression> result =
+                parse("sum(price,)");
+
+        assertTrue(result.hasRoot());
+        assertTrue(result.hasErrors());
+
+        CallExpression call =
+                (CallExpression) result.root();
+
+        assertEquals(1, call.argumentCount());
+        assertTrue(call.hasTrailingComma());
+        assertTrue(call.hasRightParenthesis());
+
+        assertEquals(
+                SqlDiagnosticCodes.EXPECTED_ARGUMENT,
+                result.diagnostics().get(0).code()
+        );
+
+        assertEquals(
+                new TextRange(10, 11),
+                result.diagnostics().get(0).range()
+        );
+    }
+
+    @Test
+    public void missingArgumentCommaMustProduceDiagnostic() {
+        SqlParseResult<SqlExpression> result =
+                parse("sum(a b)");
+
+        assertTrue(result.hasRoot());
+        assertTrue(result.hasErrors());
+
+        CallExpression call =
+                (CallExpression) result.root();
+
+        assertEquals(1, call.argumentCount());
+        assertTrue(call.hasRightParenthesis());
+
+        assertEquals(
+                SqlDiagnosticCodes
+                        .EXPECTED_COMMA_OR_RIGHT_PARENTHESIS,
+                result.diagnostics().get(0).code()
+        );
+
+        assertEquals(
+                new TextRange(6, 7),
+                result.diagnostics().get(0).range()
+        );
+    }
+
+    @Test
+    public void leadingArgumentCommaMustProduceDiagnostic() {
+        SqlParseResult<SqlExpression> result =
+                parse("sum(,a)");
+
+        assertTrue(result.hasRoot());
+        assertTrue(result.hasErrors());
+
+        CallExpression call =
+                (CallExpression) result.root();
+
+        assertEquals(1, call.argumentCount());
+        assertTrue(call.hasRightParenthesis());
+
+        assertEquals(
+                SqlDiagnosticCodes.EXPECTED_ARGUMENT,
+                result.diagnostics().get(0).code()
+        );
+
+        assertEquals(
+                new TextRange(4, 5),
+                result.diagnostics().get(0).range()
+        );
     }
 }
