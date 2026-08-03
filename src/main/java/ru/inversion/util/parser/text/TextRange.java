@@ -5,13 +5,16 @@ public final class TextRange {
     private final int start;
     private final int end;
 
-    public TextRange(int start, int end) {
+    public TextRange(int start, int end)
+    {
         if( start < 0 )
             throw new IllegalArgumentException("start < 0: " + start);
+
         if( end < start )
             throw new IllegalArgumentException( "end < start: [" + start + ", " + end + ")" );
+
         this.start = start;
-        this.end = end;
+        this.end   = end;
     }
 
     public int start( ) { return start; }

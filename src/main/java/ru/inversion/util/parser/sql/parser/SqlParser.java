@@ -13,8 +13,8 @@ import java.util.Objects;
 
 public final class SqlParser {
 
-    private final SqlTokenCursor cursor;
-    private final DiagnosticBag diagnostics;
+    private final SqlTokenCursor  cursor;
+    private final DiagnosticBag   diagnostics;
     private final LexerResult<SqlTokenKind> lexerResult;
 
     public SqlParser(CharSequence source)
@@ -204,13 +204,9 @@ public final class SqlParser {
                 );
 
                 /*
-                 * Не поглощаем границы окружающей конструкции.
-                 * Например, ')' должен обработать parser скобок.
+                 * Точку уже поглотили — продвижение обеспечено.
+                 * Следующий токен должен обработать внешний уровень.
                  */
-                if (!isExpressionBoundary()) {
-                    cursor.consume();
-                }
-
                 break;
             }
 
@@ -450,7 +446,8 @@ public final class SqlParser {
             return null;
         }
 
-        while (cursor.is(
+        if (isCallableExpression(expression)
+                && cursor.is(
                 SqlTokenKind.LEFT_PARENTHESIS
         )) {
             expression =
@@ -458,6 +455,14 @@ public final class SqlParser {
         }
 
         return expression;
+    }
+
+    private boolean isCallableExpression(
+            SqlExpression expression
+    ) {
+        return expression instanceof NameExpression
+                || expression
+                instanceof QualifiedNameExpression;
     }
 
     private CallExpression parseCallExpression(
