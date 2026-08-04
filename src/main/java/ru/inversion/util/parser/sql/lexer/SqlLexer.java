@@ -25,6 +25,8 @@ public final class SqlLexer {
             new WhitespaceRecognizer<>( SqlTokenKind.WHITESPACE ),
 
             new LineCommentRecognizer(),
+
+            new PreprocessorDirectiveRecognizer(),
             new BlockCommentRecognizer(),
 
             new OracleQQuotedStringRecognizer(),

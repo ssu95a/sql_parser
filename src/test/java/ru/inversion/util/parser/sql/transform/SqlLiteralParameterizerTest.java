@@ -826,4 +826,317 @@ public class SqlLiteralParameterizerTest {
                 noneOracleResult.sql()
         );
     }
+
+    @Test
+    public void skipsLiteralsInsideProtectedSection() {
+        String sql =
+                "select 'before', "
+                        + "/* @parameterize:off */ "
+                        + "'protected', 10, 20.5 "
+                        + "/* @parameterize:on */, "
+                        + "'after', 30";
+
+        ParameterizedSql result =
+                parameterizer.parameterize(sql);
+
+        assertEquals(
+                "select ?, "
+                        + "/* @parameterize:off */ "
+                        + "'protected', 10, 20.5 "
+                        + "/* @parameterize:on */, "
+                        + "?, ?",
+                result.sql()
+        );
+
+        assertEquals(
+                Arrays.<Object>asList(
+                        "before",
+                        "after",
+                        new BigInteger("30")
+                ),
+                result.parameters()
+        );
+    }
+
+    @Test
+    public void preservesDirectiveFormatting() {
+        String sql =
+                "select 'before', "
+                        + "/*\n"
+                        + "    @PARAMETERIZE : OFF\n"
+                        + "*/ "
+                        + "'protected', 10 "
+                        + "/* @Parameterize : On */, "
+                        + "'after'";
+
+        ParameterizedSql result =
+                parameterizer.parameterize(sql);
+
+        assertEquals(
+                "select ?, "
+                        + "/*\n"
+                        + "    @PARAMETERIZE : OFF\n"
+                        + "*/ "
+                        + "'protected', 10 "
+                        + "/* @Parameterize : On */, "
+                        + "?",
+                result.sql()
+        );
+
+        assertEquals(
+                Arrays.<Object>asList(
+                        "before",
+                        "after"
+                ),
+                result.parameters()
+        );
+    }
+
+    @Test
+    public void supportsMultipleProtectedSections() {
+        String sql =
+                "select "
+                        + "'first', "
+                        + "/* @parameterize:off */ "
+                        + "'keep1' "
+                        + "/* @parameterize:on */, "
+                        + "'second', "
+                        + "/* @parameterize:off */ "
+                        + "10 "
+                        + "/* @parameterize:on */, "
+                        + "20";
+
+        ParameterizedSql result =
+                parameterizer.parameterize(sql);
+
+        assertEquals(
+                "select "
+                        + "?, "
+                        + "/* @parameterize:off */ "
+                        + "'keep1' "
+                        + "/* @parameterize:on */, "
+                        + "?, "
+                        + "/* @parameterize:off */ "
+                        + "10 "
+                        + "/* @parameterize:on */, "
+                        + "?",
+                result.sql()
+        );
+
+        assertEquals(
+                Arrays.<Object>asList(
+                        "first",
+                        "second",
+                        new BigInteger("20")
+                ),
+                result.parameters()
+        );
+    }
+
+    @Test
+    public void supportsEmptyProtectedSection() {
+        String sql =
+                "select 'before', "
+                        + "/* @parameterize:off */"
+                        + "/* @parameterize:on */, "
+                        + "'after'";
+
+        ParameterizedSql result =
+                parameterizer.parameterize(sql);
+
+        assertEquals(
+                "select ?, "
+                        + "/* @parameterize:off */"
+                        + "/* @parameterize:on */, "
+                        + "?",
+                result.sql()
+        );
+
+        assertEquals(
+                Arrays.<Object>asList(
+                        "before",
+                        "after"
+                ),
+                result.parameters()
+        );
+    }
+
+    @Test
+    public void skipsDialectLiteralInsideProtectedSection() {
+        SqlLiteralParameterizer postgres =
+                new SqlLiteralParameterizer(
+                        POSTGRES
+                );
+
+        String sql =
+                "select "
+                        + "$$before$$, "
+                        + "/* @parameterize:off */ "
+                        + "$tag$protected$tag$, 10 "
+                        + "/* @parameterize:on */, "
+                        + "$$after$$";
+
+        ParameterizedSql result =
+                postgres.parameterize(sql);
+
+        assertEquals(
+                "select "
+                        + "?, "
+                        + "/* @parameterize:off */ "
+                        + "$tag$protected$tag$, 10 "
+                        + "/* @parameterize:on */, "
+                        + "?",
+                result.sql()
+        );
+
+        assertEquals(
+                Arrays.<Object>asList(
+                        "before",
+                        "after"
+                ),
+                result.parameters()
+        );
+    }
+
+    @Test
+    public void directiveTextInsideStringDoesNotChangeState() {
+        String sql =
+                "select "
+                        + "'/* @parameterize:off */', "
+                        + "10";
+
+        ParameterizedSql result =
+                parameterizer.parameterize(sql);
+
+        assertEquals(
+                "select ?, ?",
+                result.sql()
+        );
+
+        assertEquals(
+                Arrays.<Object>asList(
+                        "/* @parameterize:off */",
+                        new BigInteger("10")
+                ),
+                result.parameters()
+        );
+    }
+
+    @Test
+    public void directiveTextInsideOrdinaryCommentDoesNotChangeState() {
+        String sql =
+                "select "
+                        + "/* explanation: "
+                        + "@parameterize:off */ "
+                        + "'text', 10";
+
+        ParameterizedSql result =
+                parameterizer.parameterize(sql);
+
+        assertEquals(
+                "select "
+                        + "/* explanation: "
+                        + "@parameterize:off */ "
+                        + "?, ?",
+                result.sql()
+        );
+
+        assertEquals(
+                Arrays.<Object>asList(
+                        "text",
+                        new BigInteger("10")
+                ),
+                result.parameters()
+        );
+    }
+
+    @Test
+    public void rejectsParameterizeOnWithoutOff() {
+        String sql =
+                "select "
+                        + "/* @parameterize:on */ "
+                        + "'text'";
+
+        int directiveOffset =
+                sql.indexOf(
+                        "/* @parameterize:on */"
+                );
+
+        try {
+            parameterizer.parameterize(sql);
+
+            fail(
+                    "Expected unexpected on directive "
+                            + "to be rejected"
+            );
+        } catch (IllegalArgumentException expected) {
+            assertEquals(
+                    "Unexpected @parameterize:on "
+                            + "directive at offset "
+                            + directiveOffset,
+                    expected.getMessage()
+            );
+        }
+    }
+
+    @Test
+    public void rejectsNestedParameterizeOff() {
+        String sql =
+                "select "
+                        + "/* @parameterize:off */ "
+                        + "'first' "
+                        + "/* @parameterize:off */ "
+                        + "'second' "
+                        + "/* @parameterize:on */";
+
+        int secondDirectiveOffset =
+                sql.lastIndexOf(
+                        "/* @parameterize:off */"
+                );
+
+        try {
+            parameterizer.parameterize(sql);
+
+            fail(
+                    "Expected nested off directive "
+                            + "to be rejected"
+            );
+        } catch (IllegalArgumentException expected) {
+            assertEquals(
+                    "Nested @parameterize:off "
+                            + "directive at offset "
+                            + secondDirectiveOffset,
+                    expected.getMessage()
+            );
+        }
+    }
+
+    @Test
+    public void rejectsUnclosedParameterizeOff() {
+        String sql =
+                "select 'before', "
+                        + "/* @parameterize:off */ "
+                        + "'protected', 10";
+
+        int directiveOffset =
+                sql.indexOf(
+                        "/* @parameterize:off */"
+                );
+
+        try {
+            parameterizer.parameterize(sql);
+
+            fail(
+                    "Expected unclosed off directive "
+                            + "to be rejected"
+            );
+        } catch (IllegalArgumentException expected) {
+            assertEquals(
+                    "Unclosed @parameterize:off "
+                            + "directive at offset "
+                            + directiveOffset,
+                    expected.getMessage()
+            );
+        }
+    }
 }

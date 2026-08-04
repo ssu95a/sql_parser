@@ -35,10 +35,13 @@ public enum SqlTokenKind implements TokenKind {
     /**
      * Внутренняя директива препроцессора:
      *
-     *   /*@bind-skip-begin*\/
-     *   /*@bind-skip-end*\/
+     * <pre>
+     * /* @parameterize:off *&#47;
+     * /* @parameterize:on  *&#47;
+     * </pre>
      *
-     * Для SQL parser является trivia, но обрабатывается отдельным проходом.
+     * Для SQL parser является trivia, но обрабатывается
+     * отдельным проходом.
      */
     PREPROCESSOR_DIRECTIVE(true, false, false),
 

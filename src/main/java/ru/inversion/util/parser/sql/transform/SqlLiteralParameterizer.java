@@ -60,6 +60,17 @@ import java.util.Objects;
  */
 public final class SqlLiteralParameterizer {
 
+    private static final String PARAMETERIZE_OFF_DIRECTIVE =
+            "/*@parameterize:off*/";
+
+    private static final String PARAMETERIZE_ON_DIRECTIVE =
+            "/*@parameterize:on*/";
+
+    private enum ParameterizationDirective {
+        OFF,
+        ON
+    }
+
     private final SqlLexer lexer;
     private final SqlSyntaxDialect dialect;
 
@@ -79,6 +90,16 @@ public final class SqlLiteralParameterizer {
     /**
      * Параметризует поддерживаемые литералы.
      *
+     * <p>Участки между директивами</p>
+     *
+     * <pre>
+     * /* @parameterize:off *&#47;
+     * ...
+     * /* @parameterize:on *&#47;
+     * </pre>
+     *
+     * <p>сохраняются без изменений.</p>
+     *
      * @param sql исходный SQL
      *
      * @return SQL с JDBC-параметрами и значения
@@ -88,7 +109,8 @@ public final class SqlLiteralParameterizer {
      *
      * @throws IllegalArgumentException
      *         если найден незакрытый поддерживаемый
-     *         строковый литерал
+     *         строковый литерал или нарушена
+     *         последовательность директив
      */
     public ParameterizedSql parameterize(
             CharSequence sql
@@ -113,6 +135,12 @@ public final class SqlLiteralParameterizer {
         List<Object> parameters =
                 new ArrayList<Object>();
 
+        boolean parameterizationEnabled =
+                true;
+
+        int protectionStartOffset =
+                -1;
+
         for (int index = 0;
              index < tokens.size();
              index++) {
@@ -122,6 +150,102 @@ public final class SqlLiteralParameterizer {
 
             SqlTokenKind kind =
                     token.kind();
+
+            /*
+             * Новый читаемый формат:
+             *
+             *   /* @parameterize:off *\/
+             *   /* @parameterize:on  *\/
+             *
+             * Директивы сохраняются в итоговом SQL.
+             */
+            if (kind
+                    == SqlTokenKind
+                    .PREPROCESSOR_DIRECTIVE) {
+
+                ParameterizationDirective directive =
+                        parseParameterizationDirective(
+                                token.text(source),
+                                token.range().start()
+                        );
+
+                if (directive
+                        == ParameterizationDirective.OFF) {
+
+                    if (!parameterizationEnabled) {
+                        throw nestedParameterizationOff(
+                                token.range().start()
+                        );
+                    }
+
+                    parameterizationEnabled =
+                            false;
+
+                    protectionStartOffset =
+                            token.range().start();
+                } else {
+                    if (parameterizationEnabled) {
+                        throw unexpectedParameterizationOn(
+                                token.range().start()
+                        );
+                    }
+
+                    parameterizationEnabled =
+                            true;
+
+                    protectionStartOffset =
+                            -1;
+                }
+
+                continue;
+            }
+
+            /*
+             * Legacy-формат, используемый в production:
+             *
+             *   ~ защищённый SQL ~
+             *
+             * Каждая тильда переключает состояние.
+             * Сами тильды удаляются из итогового SQL.
+             */
+            if (isLegacyParameterizationMarker(
+                    token,
+                    source
+            )) {
+                changes.add(
+                        new TextChange(
+                                token.range(),
+                                ""
+                        )
+                );
+
+                if (parameterizationEnabled) {
+                    parameterizationEnabled =
+                            false;
+
+                    protectionStartOffset =
+                            token.range().start();
+                } else {
+                    parameterizationEnabled =
+                            true;
+
+                    protectionStartOffset =
+                            -1;
+                }
+
+                continue;
+            }
+
+            /*
+             * Токены внутри защищённого участка остаются
+             * без изменений и не добавляются в parameters.
+             *
+             * Переключатели выше всё равно обрабатываются,
+             * чтобы защищённый участок можно было закрыть.
+             */
+            if (!parameterizationEnabled) {
+                continue;
+            }
 
             switch (kind) {
                 case STRING_LITERAL:
@@ -166,6 +290,16 @@ public final class SqlLiteralParameterizer {
                 default:
                     break;
             }
+        }
+
+        /*
+         * Нечётное количество legacy-маркеров либо
+         * @parameterize:off без последующего включения.
+         */
+        if (!parameterizationEnabled) {
+            throw unclosedParameterizationProtection(
+                    protectionStartOffset
+            );
         }
 
         String parameterizedSql =
@@ -740,5 +874,138 @@ public final class SqlLiteralParameterizer {
         }
 
         return index;
+    }
+
+    private static ParameterizationDirective
+    parseParameterizationDirective(
+            String directiveText,
+            int offset
+    ) {
+        String normalized =
+                normalizeDirective(
+                        directiveText
+                );
+
+        if (PARAMETERIZE_OFF_DIRECTIVE.equals(
+                normalized
+        )) {
+            return ParameterizationDirective.OFF;
+        }
+
+        if (PARAMETERIZE_ON_DIRECTIVE.equals(
+                normalized
+        )) {
+            return ParameterizationDirective.ON;
+        }
+
+        /*
+         * При корректной работе lexer-а сюда попасть
+         * невозможно: PREPROCESSOR_DIRECTIVE создаётся
+         * только для двух поддерживаемых команд.
+         */
+        throw new IllegalArgumentException(
+                "Unsupported preprocessor directive "
+                        + "at offset "
+                        + offset
+        );
+    }
+
+    private static String normalizeDirective(
+            String directiveText
+    ) {
+        StringBuilder normalized =
+                new StringBuilder(
+                        directiveText.length()
+                );
+
+        for (int index = 0;
+             index < directiveText.length();
+             index++) {
+
+            char character =
+                    directiveText.charAt(index);
+
+            if (Character.isWhitespace(character)
+                    || Character.isSpaceChar(character)) {
+
+                continue;
+            }
+
+            normalized.append(
+                    toLowerAscii(character)
+            );
+        }
+
+        return normalized.toString();
+    }
+
+    private static char toLowerAscii(
+            char character
+    ) {
+        if (character >= 'A'
+                && character <= 'Z') {
+
+            return (char) (
+                    character
+                            + ('a' - 'A')
+            );
+        }
+
+        return character;
+    }
+
+    private static IllegalArgumentException
+    nestedParameterizationOff(
+            int offset
+    ) {
+        return new IllegalArgumentException(
+                "Nested @parameterize:off "
+                        + "directive at offset "
+                        + offset
+        );
+    }
+
+    private static IllegalArgumentException
+    unexpectedParameterizationOn(
+            int offset
+    ) {
+        return new IllegalArgumentException(
+                "Unexpected @parameterize:on "
+                        + "directive at offset "
+                        + offset
+        );
+    }
+
+    private static IllegalArgumentException
+    unclosedParameterizationOff(
+            int offset
+    ) {
+        return new IllegalArgumentException(
+                "Unclosed @parameterize:off "
+                        + "directive at offset "
+                        + offset
+        );
+    }
+
+    private static boolean isLegacyParameterizationMarker(
+            Token<SqlTokenKind> token,
+            SourceText source
+    ) {
+        return token.kind()
+                == SqlTokenKind.OPERATOR
+                && "~".equals(
+                token.text(source)
+        );
+    }
+
+    private static IllegalArgumentException
+    unclosedParameterizationProtection(
+            int offset
+    ) {
+        return new IllegalArgumentException(
+                "Unclosed parameterization protection "
+                        + "at offset "
+                        + offset
+        );
     }
 }
