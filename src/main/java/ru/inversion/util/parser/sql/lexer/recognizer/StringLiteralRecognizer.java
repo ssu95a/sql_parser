@@ -37,7 +37,8 @@ public final class StringLiteralRecognizer implements TokenRecognizer<SqlTokenKi
 
             if (character == '\'')
             {
-                if (source.get(end + 1) == '\'') {
+                if( source.get(end + 1) == '\'' )
+                {
                     end += 2;
                     continue;
                 }

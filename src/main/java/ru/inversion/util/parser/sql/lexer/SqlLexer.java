@@ -28,6 +28,8 @@ public final class SqlLexer {
             new StringLiteralRecognizer(),
             new QuotedIdentifierRecognizer(),
 
+            new PostgresDollarQuotedStringRecognizer(),
+
             new JdbcParameterRecognizer(),
             new NamedParameterRecognizer(),
             new PostgresPositionalParameterRecognizer(),

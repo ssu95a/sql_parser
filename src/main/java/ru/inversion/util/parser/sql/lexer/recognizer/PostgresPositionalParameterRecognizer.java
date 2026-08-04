@@ -27,10 +27,7 @@ public final class PostgresPositionalParameterRecognizer implements TokenRecogni
 
         while (isDigit(source.get(end))) { end++; }
 
-        return new TokenMatch<SqlTokenKind>( SqlTokenKind.POSTGRES_POSITIONAL_PARAMETER, end );
+        return new TokenMatch<>( SqlTokenKind.POSTGRES_POSITIONAL_PARAMETER, end );
     }
 
-    private static boolean isDigit(int character) {
-        return character >= '0' && character <= '9';
-    }
 }

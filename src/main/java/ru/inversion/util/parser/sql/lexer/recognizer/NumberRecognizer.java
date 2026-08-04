@@ -28,13 +28,15 @@ public final class NumberRecognizer implements TokenRecognizer<SqlTokenKind> {
 
         int end = offset;
 
-        while (isDigit(source.get(end))) {
+        while( isDigit(source.get(end)) )
+        {
             end++;
         }
 
         boolean hasIntegerPart = end > offset;
 
-        if (source.get(end) == '.') {
+        if( source.get(end) == '.')
+        {
             /*
              * Одиночная точка числом не является.
              *
@@ -53,10 +55,10 @@ public final class NumberRecognizer implements TokenRecognizer<SqlTokenKind> {
              *
              * Первый токен будет INTEGER_LITERAL "123".
              */
-            if (source.get(end + 1) == '.') {
-                if (!hasIntegerPart) {
+            if( source.get(end + 1) == '.')
+            {
+                if( !hasIntegerPart )
                     return null;
-                }
 
                 return new TokenMatch<>( SqlTokenKind.INTEGER_LITERAL, end);
             }
@@ -67,26 +69,12 @@ public final class NumberRecognizer implements TokenRecognizer<SqlTokenKind> {
                 end++;
             }
 
-            return new TokenMatch<SqlTokenKind>(
-                    SqlTokenKind.DECIMAL_LITERAL,
-                    end
-            );
+            return new TokenMatch<>( SqlTokenKind.DECIMAL_LITERAL, end );
         }
 
-        if (!hasIntegerPart) {
+        if( !hasIntegerPart )
             return null;
-        }
 
-        return new TokenMatch<SqlTokenKind>(
-                SqlTokenKind.INTEGER_LITERAL,
-                end
-        );
-    }
-
-    /**
-     * SQL numeric literals используют ASCII-цифры.
-     */
-    private static boolean isDigit(int character) {
-        return character >= '0' && character <= '9';
+        return new TokenMatch<>( SqlTokenKind.INTEGER_LITERAL, end );
     }
 }
