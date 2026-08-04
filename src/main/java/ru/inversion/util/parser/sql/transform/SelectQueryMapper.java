@@ -48,7 +48,7 @@ public final class SelectQueryMapper {
                 structure.selectItemInsertion,
                 structure.wherePredicateRange,
                 structure.whereInsertion,
-                structure.orderByItemsRange,
+                structure.orderByClauseRange,
                 structure.orderByInsertion,
                 parameters
         );
@@ -450,17 +450,11 @@ public final class SelectQueryMapper {
                         orderIndex + 1
                 );
 
-        int itemsStartIndex =
-                nextNonTriviaTokenIndex(
-                        tokens,
-                        byIndex + 1
-                );
-
         int boundaryIndex =
                 findOrderByBoundaryIndex(
                         tokens,
                         source,
-                        itemsStartIndex
+                        byIndex + 1
                 );
 
         int boundaryOffset =
@@ -468,30 +462,20 @@ public final class SelectQueryMapper {
                         .range()
                         .start();
 
-        int itemsStart;
-
-        if (itemsStartIndex >= boundaryIndex) {
-            itemsStart =
-                    boundaryOffset;
-        } else {
-            itemsStart =
-                    tokens.get(itemsStartIndex)
-                            .range()
-                            .start();
-        }
-
-        int itemsEnd =
+        int clauseEnd =
                 findClauseContentEnd(
                         tokens,
-                        itemsStartIndex,
+                        orderIndex,
                         boundaryIndex,
                         boundaryOffset
                 );
 
         return OrderByMapping.present(
                 new TextRange(
-                        itemsStart,
-                        itemsEnd
+                        tokens.get(orderIndex)
+                                .range()
+                                .start(),
+                        clauseEnd
                 )
         );
     }
@@ -824,25 +808,25 @@ public final class SelectQueryMapper {
 
     private static final class OrderByMapping {
 
-        private final TextRange itemsRange;
+        private final TextRange clauseRange;
         private final SqlAnchor insertion;
 
         private OrderByMapping(
-                TextRange itemsRange,
+                TextRange clauseRange,
                 SqlAnchor insertion
         ) {
-            this.itemsRange =
-                    itemsRange;
+            this.clauseRange =
+                    clauseRange;
 
             this.insertion =
                     insertion;
         }
 
         private static OrderByMapping present(
-                TextRange itemsRange
+                TextRange clauseRange
         ) {
             return new OrderByMapping(
-                    itemsRange,
+                    clauseRange,
                     null
             );
         }

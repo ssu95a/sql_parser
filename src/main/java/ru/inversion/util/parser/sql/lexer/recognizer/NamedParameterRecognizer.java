@@ -29,7 +29,7 @@ public final class NamedParameterRecognizer implements TokenRecognizer<SqlTokenK
 
         int end = offset + 2;
 
-        while (isNamePart(source.get(end)) )
+        while( isNamePart(source.get(end)) )
             end++;
 
         return new TokenMatch<>( SqlTokenKind.NAMED_PARAMETER, end );
@@ -41,7 +41,6 @@ public final class NamedParameterRecognizer implements TokenRecognizer<SqlTokenK
         if( character == SourceText.EOF )
             return false;
 
-
         char value = (char) character;
 
         return value == '_' || Character.isLetter(value);
@@ -49,6 +48,7 @@ public final class NamedParameterRecognizer implements TokenRecognizer<SqlTokenK
 
     /** */
     private static boolean isNamePart(int character) {
+
         if( character == SourceText.EOF )
             return false;
 

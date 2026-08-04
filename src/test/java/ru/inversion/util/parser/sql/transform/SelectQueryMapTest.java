@@ -74,7 +74,7 @@ public class SelectQueryMapTest {
 
         assertEquals(
                 new TextRange(30, 40),
-                map.orderByItemsRange()
+                map.orderByClauseRange()
         );
     }
 
@@ -238,7 +238,7 @@ public class SelectQueryMapTest {
                         noParameters()
                 );
 
-        map.orderByItemsRange();
+        map.orderByClauseRange();
     }
 
     @Test(expected = IllegalStateException.class)

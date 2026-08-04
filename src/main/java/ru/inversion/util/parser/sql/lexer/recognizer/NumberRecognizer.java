@@ -58,10 +58,7 @@ public final class NumberRecognizer implements TokenRecognizer<SqlTokenKind> {
                     return null;
                 }
 
-                return new TokenMatch<SqlTokenKind>(
-                        SqlTokenKind.INTEGER_LITERAL,
-                        end
-                );
+                return new TokenMatch<>( SqlTokenKind.INTEGER_LITERAL, end);
             }
 
             end++;

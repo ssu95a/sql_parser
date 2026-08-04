@@ -25,7 +25,7 @@ public final class SelectQueryMap {
      * Если ORDER BY существует, заполнен orderByItemsRange.
      * Если ORDER BY отсутствует, заполнен orderByInsertion.
      */
-    private final TextRange orderByItemsRange;
+    private final TextRange orderByClauseRange;
     private final SqlAnchor orderByInsertion;
 
     private final List<SqlParameterOccurrence> parameters;
@@ -34,7 +34,7 @@ public final class SelectQueryMap {
             SqlAnchor selectItemInsertion,
             TextRange wherePredicateRange,
             SqlAnchor whereInsertion,
-            TextRange orderByItemsRange,
+            TextRange orderByClauseRange,
             SqlAnchor orderByInsertion,
             List<SqlParameterOccurrence> parameters
     ) {
@@ -52,9 +52,9 @@ public final class SelectQueryMap {
         );
 
         requireExactlyOne(
-                orderByItemsRange,
+                orderByClauseRange,
                 orderByInsertion,
-                "Exactly one of orderByItemsRange "
+                "Exactly one of orderByClauseRange "
                         + "and orderByInsertion must be specified"
         );
 
@@ -64,8 +64,8 @@ public final class SelectQueryMap {
         this.whereInsertion =
                 whereInsertion;
 
-        this.orderByItemsRange =
-                orderByItemsRange;
+        this.orderByClauseRange =
+                orderByClauseRange;
 
         this.orderByInsertion =
                 orderByInsertion;
@@ -147,7 +147,7 @@ public final class SelectQueryMap {
      * Возвращает true, если внешний SELECT содержит ORDER BY.
      */
     public boolean hasOrderBy() {
-        return orderByItemsRange != null;
+        return orderByClauseRange != null;
     }
 
     /**
@@ -169,14 +169,14 @@ public final class SelectQueryMap {
      *
      * @throws IllegalStateException если ORDER BY отсутствует
      */
-    public TextRange orderByItemsRange() {
+    public TextRange orderByClauseRange() {
         if (!hasOrderBy()) {
             throw new IllegalStateException(
                     "ORDER BY is absent"
             );
         }
 
-        return orderByItemsRange;
+        return orderByClauseRange;
     }
 
     /**
@@ -195,6 +195,28 @@ public final class SelectQueryMap {
     }
 
 
+    public boolean orderByHasParameters() {
+        if (!hasOrderBy()) {
+            return false;
+        }
+
+        for (SqlParameterOccurrence parameter
+                : parameters) {
+
+            TextRange parameterRange =
+                    parameter.range();
+
+            if (orderByClauseRange.start()
+                    <= parameterRange.start()
+                    && parameterRange.end()
+                    <= orderByClauseRange.end()) {
+
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     /**
      * Все найденные параметры в порядке появления.
