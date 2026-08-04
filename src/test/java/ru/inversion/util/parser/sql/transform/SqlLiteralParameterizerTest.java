@@ -14,6 +14,11 @@ import static org.junit.Assert.fail;
 import static ru.inversion.util.parser.sql.dialect
         .TestSqlSyntaxDialects.NONE;
 
+import static ru.inversion.util.parser.sql.dialect
+        .TestSqlSyntaxDialects.ORACLE;
+import static ru.inversion.util.parser.sql.dialect
+        .TestSqlSyntaxDialects.POSTGRES;
+
 public class SqlLiteralParameterizerTest {
 
     private final SqlLiteralParameterizer parameterizer =
@@ -465,5 +470,360 @@ public class SqlLiteralParameterizerTest {
     @Test(expected = NullPointerException.class)
     public void rejectsNullSql() {
         parameterizer.parameterize(null);
+    }
+
+    @Test
+    public void postgresParameterizesUntaggedDollarQuotedString() {
+        SqlLiteralParameterizer postgres =
+                new SqlLiteralParameterizer(
+                        POSTGRES
+                );
+
+        ParameterizedSql result =
+                postgres.parameterize(
+                        "select $$text$$ from t"
+                );
+
+        assertEquals(
+                "select ? from t",
+                result.sql()
+        );
+
+        assertEquals(
+                Collections.<Object>singletonList(
+                        "text"
+                ),
+                result.parameters()
+        );
+    }
+
+    @Test
+    public void postgresParameterizesTaggedDollarQuotedString() {
+        SqlLiteralParameterizer postgres =
+                new SqlLiteralParameterizer(
+                        POSTGRES
+                );
+
+        ParameterizedSql result =
+                postgres.parameterize(
+                        "select $body$John's car$body$"
+                );
+
+        assertEquals(
+                "select ?",
+                result.sql()
+        );
+
+        assertEquals(
+                Collections.<Object>singletonList(
+                        "John's car"
+                ),
+                result.parameters()
+        );
+    }
+
+    @Test
+    public void postgresDoesNotParameterizeOracleQQuotedString() {
+        SqlLiteralParameterizer postgres =
+                new SqlLiteralParameterizer(
+                        POSTGRES
+                );
+
+        String sql =
+                "select q'[oracle text]'";
+
+        ParameterizedSql result =
+                postgres.parameterize(sql);
+
+        assertEquals(
+                sql,
+                result.sql()
+        );
+
+        assertTrue(
+                result.parameters().isEmpty()
+        );
+    }
+
+    @Test
+    public void oracleParameterizesSquareBracketQuotedString() {
+        SqlLiteralParameterizer oracle =
+                new SqlLiteralParameterizer(
+                        ORACLE
+                );
+
+        ParameterizedSql result =
+                oracle.parameterize(
+                        "select q'[text]' from dual"
+                );
+
+        assertEquals(
+                "select ? from dual",
+                result.sql()
+        );
+
+        assertEquals(
+                Collections.<Object>singletonList(
+                        "text"
+                ),
+                result.parameters()
+        );
+    }
+
+    @Test
+    public void oracleParameterizesCustomDelimiterQuotedString() {
+        SqlLiteralParameterizer oracle =
+                new SqlLiteralParameterizer(
+                        ORACLE
+                );
+
+        ParameterizedSql result =
+                oracle.parameterize(
+                        "select q'!John's car!' from dual"
+                );
+
+        assertEquals(
+                "select ? from dual",
+                result.sql()
+        );
+
+        assertEquals(
+                Collections.<Object>singletonList(
+                        "John's car"
+                ),
+                result.parameters()
+        );
+    }
+
+    @Test
+    public void oracleDoesNotParameterizePostgresDollarQuotedString() {
+        SqlLiteralParameterizer oracle =
+                new SqlLiteralParameterizer(
+                        ORACLE
+                );
+
+        String sql =
+                "select $$postgres text$$ from dual";
+
+        ParameterizedSql result =
+                oracle.parameterize(sql);
+
+        assertEquals(
+                sql,
+                result.sql()
+        );
+
+        assertTrue(
+                result.parameters().isEmpty()
+        );
+    }
+
+    @Test
+    public void noneDoesNotParameterizeDialectStrings() {
+        String sql =
+                "select $$postgres$$, q'[oracle]'";
+
+        ParameterizedSql result =
+                parameterizer.parameterize(sql);
+
+        assertEquals(
+                sql,
+                result.sql()
+        );
+
+        assertTrue(
+                result.parameters().isEmpty()
+        );
+    }
+
+    @Test
+    public void ordinaryStringsWorkForPostgresAndOracle() {
+        SqlLiteralParameterizer postgres =
+                new SqlLiteralParameterizer(
+                        POSTGRES
+                );
+
+        SqlLiteralParameterizer oracle =
+                new SqlLiteralParameterizer(
+                        ORACLE
+                );
+
+        ParameterizedSql postgresResult =
+                postgres.parameterize(
+                        "select 'text'"
+                );
+
+        ParameterizedSql oracleResult =
+                oracle.parameterize(
+                        "select 'text'"
+                );
+
+        assertEquals(
+                "select ?",
+                postgresResult.sql()
+        );
+
+        assertEquals(
+                "select ?",
+                oracleResult.sql()
+        );
+
+        assertEquals(
+                Collections.<Object>singletonList(
+                        "text"
+                ),
+                postgresResult.parameters()
+        );
+
+        assertEquals(
+                Collections.<Object>singletonList(
+                        "text"
+                ),
+                oracleResult.parameters()
+        );
+    }
+
+    @Test
+    public void preservesMixedPostgresLiteralOrder() {
+        SqlLiteralParameterizer postgres =
+                new SqlLiteralParameterizer(
+                        POSTGRES
+                );
+
+        ParameterizedSql result =
+                postgres.parameterize(
+                        "select 'first', "
+                                + "$body$second$body$, "
+                                + "10, "
+                                + "20.5"
+                );
+
+        assertEquals(
+                "select ?, ?, ?, ?",
+                result.sql()
+        );
+
+        assertEquals(
+                Arrays.<Object>asList(
+                        "first",
+                        "second",
+                        new BigInteger("10"),
+                        new BigDecimal("20.5")
+                ),
+                result.parameters()
+        );
+    }
+
+    @Test
+    public void preservesMixedOracleLiteralOrder() {
+        SqlLiteralParameterizer oracle =
+                new SqlLiteralParameterizer(
+                        ORACLE
+                );
+
+        ParameterizedSql result =
+                oracle.parameterize(
+                        "select 'first', "
+                                + "q'[second]', "
+                                + "10 "
+                                + "from dual"
+                );
+
+        assertEquals(
+                "select ?, ?, ? from dual",
+                result.sql()
+        );
+
+        assertEquals(
+                Arrays.<Object>asList(
+                        "first",
+                        "second",
+                        new BigInteger("10")
+                ),
+                result.parameters()
+        );
+    }
+
+    @Test
+    public void rejectsUnterminatedPostgresDollarQuotedString() {
+        SqlLiteralParameterizer postgres =
+                new SqlLiteralParameterizer(
+                        POSTGRES
+                );
+
+        String sql =
+                "select $body$unterminated";
+
+        try {
+            postgres.parameterize(sql);
+
+            fail(
+                    "Expected unterminated PostgreSQL "
+                            + "string to be rejected"
+            );
+        } catch (IllegalArgumentException expected) {
+            assertEquals(
+                    "Unterminated PostgreSQL "
+                            + "dollar-quoted string at offset "
+                            + sql.indexOf("$body$"),
+                    expected.getMessage()
+            );
+        }
+    }
+
+    @Test
+    public void rejectsUnterminatedOracleQQuotedString() {
+        SqlLiteralParameterizer oracle =
+                new SqlLiteralParameterizer(
+                        ORACLE
+                );
+
+        String sql =
+                "select q'[unterminated";
+
+        try {
+            oracle.parameterize(sql);
+
+            fail(
+                    "Expected unterminated Oracle "
+                            + "string to be rejected"
+            );
+        } catch (IllegalArgumentException expected) {
+            assertEquals(
+                    "Unterminated Oracle "
+                            + "q-quoted string at offset "
+                            + sql.indexOf("q'"),
+                    expected.getMessage()
+            );
+        }
+    }
+
+    @Test
+    public void unsupportedDialectDoesNotValidateForeignString() {
+        String postgresSql =
+                "select $body$unterminated";
+
+        String oracleSql =
+                "select q'[unterminated";
+
+        ParameterizedSql nonePostgresResult =
+                parameterizer.parameterize(
+                        postgresSql
+                );
+
+        ParameterizedSql noneOracleResult =
+                parameterizer.parameterize(
+                        oracleSql
+                );
+
+        assertEquals(
+                postgresSql,
+                nonePostgresResult.sql()
+        );
+
+        assertEquals(
+                oracleSql,
+                noneOracleResult.sql()
+        );
     }
 }

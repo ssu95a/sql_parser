@@ -19,10 +19,10 @@ import java.util.Locale;
 import java.util.Objects;
 
 /**
- * Заменяет обычные строковые и числовые SQL-литералы
- * на JDBC-параметры {@code ?}.
+ * Заменяет поддерживаемые строковые и числовые
+ * SQL-литералы на JDBC-параметры {@code ?}.
  *
- * <p>Поддерживаются:</p>
+ * <p>Всегда поддерживаются:</p>
  *
  * <ul>
  *     <li>обычные строки в одинарных кавычках;</li>
@@ -30,32 +30,45 @@ import java.util.Objects;
  *     <li>десятичные числовые литералы.</li>
  * </ul>
  *
+ * <p>В зависимости от переданного диалекта
+ * также могут поддерживаться:</p>
+ *
+ * <ul>
+ *     <li>PostgreSQL dollar-quoted strings;</li>
+ *     <li>Oracle q-quoted strings.</li>
+ * </ul>
+ *
  * <p>Не изменяются:</p>
  *
  * <ul>
- *     <li>существующие параметры {@code ?}, {@code :name},
- *     {@code $1};</li>
+ *     <li>существующие параметры {@code ?},
+ *     {@code :name}, {@code $1};</li>
  *     <li>quoted identifiers;</li>
  *     <li>комментарии;</li>
- *     <li>диалектные строковые литералы с префиксами;</li>
+ *     <li>не поддерживаемые выбранным диалектом
+ *     формы строковых литералов;</li>
  *     <li>типизированные литералы DATE, TIMESTAMP,
  *     INTERVAL и аналогичные;</li>
  *     <li>неподдерживаемые числовые формы вроде
  *     {@code 1e3} и {@code 0xFF}.</li>
  * </ul>
  *
- * <p>Список {@link ParameterizedSql#parameters()} содержит
- * только значения литералов, заменённых этим проходом.
- * Значения уже существующих параметров в него не входят.</p>
+ * <p>Список {@link ParameterizedSql#parameters()}
+ * содержит только значения литералов, заменённых
+ * этим проходом. Значения уже существующих
+ * параметров в него не входят.</p>
  */
 public final class SqlLiteralParameterizer {
 
     private final SqlLexer lexer;
     private final SqlSyntaxDialect dialect;
 
-    public SqlLiteralParameterizer(SqlSyntaxDialect dialect) {
+    public SqlLiteralParameterizer(
+            SqlSyntaxDialect dialect
+    ) {
         this.lexer =
                 new SqlLexer();
+
         this.dialect =
                 Objects.requireNonNull(
                         dialect,
@@ -74,7 +87,7 @@ public final class SqlLiteralParameterizer {
      *         если sql равен null
      *
      * @throws IllegalArgumentException
-     *         если найден незакрытый обычный
+     *         если найден незакрытый поддерживаемый
      *         строковый литерал
      */
     public ParameterizedSql parameterize(
@@ -110,37 +123,48 @@ public final class SqlLiteralParameterizer {
             SqlTokenKind kind =
                     token.kind();
 
-            if (kind == SqlTokenKind.STRING_LITERAL) {
-                parameterizeStringLiteral(
-                        tokens,
-                        index,
-                        source,
-                        token,
-                        changes,
-                        parameters
-                );
+            switch (kind) {
+                case STRING_LITERAL:
+                    parameterizeStringLiteral(
+                            tokens,
+                            index,
+                            source,
+                            token,
+                            changes,
+                            parameters
+                    );
+                    break;
 
-                continue;
-            }
+                case POSTGRES_DOLLAR_QUOTED_STRING:
+                case ORACLE_Q_QUOTED_STRING:
+                    parameterizeDialectStringLiteral(
+                            source,
+                            token,
+                            changes,
+                            parameters
+                    );
+                    break;
 
-            if (kind == SqlTokenKind.INTEGER_LITERAL) {
-                parameterizeIntegerLiteral(
-                        source,
-                        token,
-                        changes,
-                        parameters
-                );
+                case INTEGER_LITERAL:
+                    parameterizeIntegerLiteral(
+                            source,
+                            token,
+                            changes,
+                            parameters
+                    );
+                    break;
 
-                continue;
-            }
+                case DECIMAL_LITERAL:
+                    parameterizeDecimalLiteral(
+                            source,
+                            token,
+                            changes,
+                            parameters
+                    );
+                    break;
 
-            if (kind == SqlTokenKind.DECIMAL_LITERAL) {
-                parameterizeDecimalLiteral(
-                        source,
-                        token,
-                        changes,
-                        parameters
-                );
+                default:
+                    break;
             }
         }
 
@@ -181,10 +205,62 @@ public final class SqlLiteralParameterizer {
                         token.range().start()
                 );
 
-        parameters.add(value);
+        addParameter(
+                token,
+                value,
+                changes,
+                parameters
+        );
+    }
 
-        changes.add(
-                replacement(token.range())
+    private void parameterizeDialectStringLiteral(
+            SourceText source,
+            Token<SqlTokenKind> token,
+            List<TextChange> changes,
+            List<Object> parameters
+    ) {
+        SqlTokenKind kind =
+                token.kind();
+
+        if (!shouldParameterizeDialectString(kind)) {
+            return;
+        }
+
+        String literalText =
+                token.text(source);
+
+        String value;
+
+        if (kind
+                == SqlTokenKind
+                .POSTGRES_DOLLAR_QUOTED_STRING) {
+
+            value =
+                    parsePostgresDollarQuotedString(
+                            literalText,
+                            token.range().start()
+                    );
+        } else if (kind
+                == SqlTokenKind
+                .ORACLE_Q_QUOTED_STRING) {
+
+            value =
+                    parseOracleQQuotedString(
+                            literalText,
+                            token.range().start()
+                    );
+        } else {
+            throw new IllegalArgumentException(
+                    "Unsupported dialect string token: "
+                            + kind
+            );
+        }
+
+        addParameter(
+                token,
+                value,
+                changes,
+                parameters
         );
     }
 
@@ -204,10 +280,11 @@ public final class SqlLiteralParameterizer {
         String literalText =
                 token.text(source);
 
+        BigInteger value;
+
         try {
-            parameters.add(
-                    new BigInteger(literalText)
-            );
+            value =
+                    new BigInteger(literalText);
         } catch (NumberFormatException exception) {
             throw invalidNumericLiteral(
                     literalText,
@@ -216,8 +293,11 @@ public final class SqlLiteralParameterizer {
             );
         }
 
-        changes.add(
-                replacement(token.range())
+        addParameter(
+                token,
+                value,
+                changes,
+                parameters
         );
     }
 
@@ -237,10 +317,11 @@ public final class SqlLiteralParameterizer {
         String literalText =
                 token.text(source);
 
+        BigDecimal value;
+
         try {
-            parameters.add(
-                    new BigDecimal(literalText)
-            );
+            value =
+                    new BigDecimal(literalText);
         } catch (NumberFormatException exception) {
             throw invalidNumericLiteral(
                     literalText,
@@ -248,6 +329,22 @@ public final class SqlLiteralParameterizer {
                     exception
             );
         }
+
+        addParameter(
+                token,
+                value,
+                changes,
+                parameters
+        );
+    }
+
+    private static void addParameter(
+            Token<SqlTokenKind> token,
+            Object value,
+            List<TextChange> changes,
+            List<Object> parameters
+    ) {
+        parameters.add(value);
 
         changes.add(
                 replacement(token.range())
@@ -264,14 +361,14 @@ public final class SqlLiteralParameterizer {
     }
 
     /**
-     * Диалектные формы пока оставляются без изменений.
+     * Диалектные формы, которые пока не представлены
+     * отдельным токеном, оставляются без изменений.
      *
-     * Примеры:
+     * <p>Например:</p>
      *
      * <pre>
      * E'text'
      * N'text'
-     * q'[text]'
      * U&amp;'text'
      * </pre>
      */
@@ -321,6 +418,32 @@ public final class SqlLiteralParameterizer {
         );
     }
 
+    private boolean shouldParameterizeDialectString(
+            SqlTokenKind kind
+    ) {
+        if (kind
+                == SqlTokenKind
+                .POSTGRES_DOLLAR_QUOTED_STRING) {
+
+            return dialect.supports(
+                    SqlSyntaxFeature
+                            .POSTGRES_DOLLAR_QUOTED_STRING
+            );
+        }
+
+        if (kind
+                == SqlTokenKind
+                .ORACLE_Q_QUOTED_STRING) {
+
+            return dialect.supports(
+                    SqlSyntaxFeature
+                            .ORACLE_Q_QUOTED_STRING
+            );
+        }
+
+        return false;
+    }
+
     private static boolean hasAdjacentStringPrefix(
             SourceText source,
             int stringStart
@@ -344,9 +467,8 @@ public final class SqlLiteralParameterizer {
     }
 
     /**
-     * Не параметризуем известные типизированные литералы.
-     *
-     * Примеры:
+     * Не параметризуем известные типизированные
+     * литералы.
      *
      * <pre>
      * DATE '2026-08-04'
@@ -380,10 +502,9 @@ public final class SqlLiteralParameterizer {
     }
 
     /**
-     * Не заменяет числовой фрагмент, если он является
-     * частью пока не поддерживаемой числовой формы.
-     *
-     * Примеры:
+     * Не заменяет числовой фрагмент, если он
+     * является частью пока не поддерживаемой
+     * числовой формы.
      *
      * <pre>
      * 1e3
@@ -453,6 +574,141 @@ public final class SqlLiteralParameterizer {
         );
     }
 
+    private static String parsePostgresDollarQuotedString(
+            String literalText,
+            int offset
+    ) {
+        int openingDelimiterEnd =
+                literalText.indexOf(
+                        '$',
+                        1
+                );
+
+        if (openingDelimiterEnd < 1) {
+            throw unterminatedPostgresString(
+                    offset
+            );
+        }
+
+        String delimiter =
+                literalText.substring(
+                        0,
+                        openingDelimiterEnd + 1
+                );
+
+        int delimiterLength =
+                delimiter.length();
+
+        if (literalText.length()
+                < delimiterLength * 2
+                || !literalText.endsWith(delimiter)) {
+
+            throw unterminatedPostgresString(
+                    offset
+            );
+        }
+
+        return literalText.substring(
+                delimiterLength,
+                literalText.length()
+                        - delimiterLength
+        );
+    }
+
+    private static String parseOracleQQuotedString(
+            String literalText,
+            int offset
+    ) {
+        if (literalText.length() < 5
+                || !isOracleQ(
+                literalText.charAt(0)
+        )
+                || literalText.charAt(1) != '\'') {
+
+            throw unterminatedOracleString(
+                    offset
+            );
+        }
+
+        char openingDelimiter =
+                literalText.charAt(2);
+
+        char closingDelimiter =
+                oracleClosingDelimiter(
+                        openingDelimiter
+                );
+
+        int closingDelimiterIndex =
+                literalText.length() - 2;
+
+        if (literalText.charAt(
+                closingDelimiterIndex
+        ) != closingDelimiter
+                || literalText.charAt(
+                literalText.length() - 1
+        ) != '\'') {
+
+            throw unterminatedOracleString(
+                    offset
+            );
+        }
+
+        return literalText.substring(
+                3,
+                closingDelimiterIndex
+        );
+    }
+
+    private static boolean isOracleQ(
+            char character
+    ) {
+        return character == 'q'
+                || character == 'Q';
+    }
+
+    private static char oracleClosingDelimiter(
+            char openingDelimiter
+    ) {
+        switch (openingDelimiter) {
+            case '[':
+                return ']';
+
+            case '{':
+                return '}';
+
+            case '(':
+                return ')';
+
+            case '<':
+                return '>';
+
+            default:
+                return openingDelimiter;
+        }
+    }
+
+    private static IllegalArgumentException
+    unterminatedPostgresString(
+            int offset
+    ) {
+        return new IllegalArgumentException(
+                "Unterminated PostgreSQL "
+                        + "dollar-quoted string at offset "
+                        + offset
+        );
+    }
+
+    private static IllegalArgumentException
+    unterminatedOracleString(
+            int offset
+    ) {
+        return new IllegalArgumentException(
+                "Unterminated Oracle "
+                        + "q-quoted string at offset "
+                        + offset
+        );
+    }
+
     private static IllegalArgumentException
     invalidNumericLiteral(
             String literalText,
@@ -484,29 +740,5 @@ public final class SqlLiteralParameterizer {
         }
 
         return index;
-    }
-
-    private boolean shouldParameterizeDialectString(
-            SqlTokenKind kind
-    ) {
-        if (kind
-                == SqlTokenKind.POSTGRES_DOLLAR_QUOTED_STRING) {
-
-            return dialect.supports(
-                    SqlSyntaxFeature
-                            .POSTGRES_DOLLAR_QUOTED_STRING
-            );
-        }
-
-        if (kind
-                == SqlTokenKind.ORACLE_Q_QUOTED_STRING) {
-
-            return dialect.supports(
-                    SqlSyntaxFeature
-                            .ORACLE_Q_QUOTED_STRING
-            );
-        }
-
-        return false;
     }
 }
