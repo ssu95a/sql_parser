@@ -19,12 +19,15 @@ public final class SqlLexer {
     private final LexerEngine<SqlTokenKind> engine;
 
     public SqlLexer() {
+
         List<TokenRecognizer<SqlTokenKind>> recognizers = Arrays.asList(
+
             new WhitespaceRecognizer<>( SqlTokenKind.WHITESPACE ),
 
             new LineCommentRecognizer(),
             new BlockCommentRecognizer(),
 
+            new OracleQQuotedStringRecognizer(),
             new StringLiteralRecognizer(),
             new QuotedIdentifierRecognizer(),
 
