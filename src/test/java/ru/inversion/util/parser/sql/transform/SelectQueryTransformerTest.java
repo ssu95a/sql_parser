@@ -3,6 +3,7 @@ package ru.inversion.util.parser.sql.transform;
 import org.junit.Test;
 import ru.inversion.util.parser.text.TextChange;
 import ru.inversion.util.parser.text.TextChangeApplier;
+import java.util.Collections;
 
 import java.util.List;
 
@@ -404,5 +405,185 @@ public class SelectQueryTransformerTest {
                     expected.getMessage()
             );
         }
+    }
+
+    @Test
+    public void prependsSelectItemAfterOptimizerHint() {
+        String sql =
+                "select /*+ INDEX(t IDX_T) */ "
+                        + "c1 from t";
+
+        String result =
+                prependSelectItem(
+                        sql,
+                        "marker"
+                );
+
+        assertEquals(
+                "select /*+ INDEX(t IDX_T) */ "
+                        + "marker, c1 from t",
+                result
+        );
+    }
+
+    @Test
+    public void prependsSelectItemAfterOptimizerHintAndDistinct() {
+        String sql =
+                "select /*+ FIRST_ROWS(10) */ "
+                        + "distinct c1 from t";
+
+        String result =
+                prependSelectItem(
+                        sql,
+                        "marker"
+                );
+
+        assertEquals(
+                "select /*+ FIRST_ROWS(10) */ "
+                        + "distinct marker, c1 from t",
+                result
+        );
+    }
+
+    @Test
+    public void prependsSelectItemAfterOptimizerHintAndAll() {
+        String sql =
+                "select /*+ FULL(t) */ "
+                        + "all c1 from t";
+
+        String result =
+                prependSelectItem(
+                        sql,
+                        "marker"
+                );
+
+        assertEquals(
+                "select /*+ FULL(t) */ "
+                        + "all marker, c1 from t",
+                result
+        );
+    }
+
+    @Test
+    public void preservesMultilineOptimizerHintWhenPrependingSelectItem() {
+        String sql =
+                "select\n"
+                        + "    /*+\n"
+                        + "        LEADING(a b)\n"
+                        + "        USE_NL(b)\n"
+                        + "    */\n"
+                        + "    c1\n"
+                        + "from t";
+
+        String result =
+                prependSelectItem(
+                        sql,
+                        "marker"
+                );
+
+        assertEquals(
+                "select\n"
+                        + "    /*+\n"
+                        + "        LEADING(a b)\n"
+                        + "        USE_NL(b)\n"
+                        + "    */\n"
+                        + "    marker, c1\n"
+                        + "from t",
+                result
+        );
+    }
+
+    @Test
+    public void prependsOnlyToOuterSelectWithNestedOptimizerHint() {
+        String sql =
+                "select c1, (\n"
+                        + "    select "
+                        + "/*+ INDEX(x IDX_X) */ "
+                        + "x.value\n"
+                        + "    from x\n"
+                        + ") as nested_value\n"
+                        + "from t";
+
+        String result =
+                prependSelectItem(
+                        sql,
+                        "marker"
+                );
+
+        assertEquals(
+                "select marker, c1, (\n"
+                        + "    select "
+                        + "/*+ INDEX(x IDX_X) */ "
+                        + "x.value\n"
+                        + "    from x\n"
+                        + ") as nested_value\n"
+                        + "from t",
+                result
+        );
+    }
+
+    @Test
+    public void preservesOptimizerHintContentsExactly() {
+        String sql =
+                "select "
+                        + "/*+ CARDINALITY(t 100) "
+                        + "SOME_HINT(~ 'text') */ "
+                        + "c1 from t";
+
+        String result =
+                prependSelectItem(
+                        sql,
+                        "marker"
+                );
+
+        assertEquals(
+                "select "
+                        + "/*+ CARDINALITY(t 100) "
+                        + "SOME_HINT(~ 'text') */ "
+                        + "marker, c1 from t",
+                result
+        );
+    }
+
+    @Test
+    public void preservesOrdinaryCommentAfterOptimizerHint() {
+        String sql =
+                "select "
+                        + "/*+ INDEX(t IDX_T) */ "
+                        + "/* projected value */ "
+                        + "c1 from t";
+
+        String result =
+                prependSelectItem(
+                        sql,
+                        "marker"
+                );
+
+        assertEquals(
+                "select "
+                        + "/*+ INDEX(t IDX_T) */ "
+                        + "/* projected value */ "
+                        + "marker, c1 from t",
+                result
+        );
+    }
+
+    private String prependSelectItem(
+            String sql,
+            String selectItem
+    ) {
+        SelectQueryMap map =
+                mapper.map(sql);
+
+        TextChange change =
+                SelectQueryTransformer.prependSelectItem(
+                        map,
+                        selectItem
+                );
+
+        return TextChangeApplier.apply(
+                sql,
+                Collections.singletonList(change)
+        );
     }
 }
