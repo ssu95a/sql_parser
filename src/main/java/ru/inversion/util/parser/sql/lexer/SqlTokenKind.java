@@ -32,6 +32,8 @@ public enum SqlTokenKind implements TokenKind {
     LINE_COMMENT(true, false, false),
     BLOCK_COMMENT(true, false, false),
 
+    OPTIMIZER_HINT(true, false, false),
+
     /**
      * Внутренняя директива препроцессора:
      *

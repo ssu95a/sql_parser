@@ -27,6 +27,7 @@ public final class SqlLexer {
             new LineCommentRecognizer(),
 
             new PreprocessorDirectiveRecognizer(),
+            new OptimizerHintRecognizer(),
             new BlockCommentRecognizer(),
 
             new OracleQQuotedStringRecognizer(),

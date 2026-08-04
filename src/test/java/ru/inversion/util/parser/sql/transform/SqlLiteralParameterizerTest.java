@@ -1139,4 +1139,34 @@ public class SqlLiteralParameterizerTest {
             );
         }
     }
+
+    @Test
+    public void preservesOptimizerHintWithoutParsingItsContents() {
+        String sql =
+                "select "
+                        + "/*+ CARDINALITY(t 100) "
+                        + "SOME_HINT(~ 'inside') */ "
+                        + "'outside', 20 "
+                        + "from table_name t";
+
+        ParameterizedSql result =
+                parameterizer.parameterize(sql);
+
+        assertEquals(
+                "select "
+                        + "/*+ CARDINALITY(t 100) "
+                        + "SOME_HINT(~ 'inside') */ "
+                        + "?, ? "
+                        + "from table_name t",
+                result.sql()
+        );
+
+        assertEquals(
+                Arrays.<Object>asList(
+                        "outside",
+                        new BigInteger("20")
+                ),
+                result.parameters()
+        );
+    }
 }

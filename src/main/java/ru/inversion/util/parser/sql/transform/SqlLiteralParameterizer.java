@@ -53,6 +53,30 @@ import java.util.Objects;
  *     {@code 1e3} и {@code 0xFF}.</li>
  * </ul>
  *
+ * <p>Отдельные участки SQL могут быть защищены
+ * от параметризации одним из двух синтаксисов.</p>
+ *
+ * <p>Legacy-синтаксис:</p>
+ *
+ * <pre>
+ * ~ защищённый SQL ~
+ * </pre>
+ *
+ * <p>Тильды удаляются из результирующего SQL.</p>
+ *
+ * <p>Синтаксис директив:</p>
+ *
+ * <pre>
+ * /* @parameterize:off *&#47;
+ * защищённый SQL
+ * /* @parameterize:on *&#47;
+ * </pre>
+ *
+ * <p>Директивы сохраняются в результирующем SQL.</p>
+ *
+ * <p>Legacy-маркеры и директивы нельзя использовать
+ * одновременно в одном SQL.</p>
+ *
  * <p>Список {@link ParameterizedSql#parameters()}
  * содержит только значения литералов, заменённых
  * этим проходом. Значения уже существующих
@@ -69,6 +93,20 @@ public final class SqlLiteralParameterizer {
     private enum ParameterizationDirective {
         OFF,
         ON
+    }
+
+    /**
+     * Синтаксис защиты, уже обнаруженный
+     * в обрабатываемом SQL.
+     *
+     * После выбора синтаксиса переключиться
+     * на другой синтаксис нельзя, даже если
+     * предыдущий защищённый участок уже закрыт.
+     */
+    private enum ProtectionSyntax {
+        NONE,
+        LEGACY_TILDE,
+        DIRECTIVE
     }
 
     private final SqlLexer lexer;
@@ -90,16 +128,6 @@ public final class SqlLiteralParameterizer {
     /**
      * Параметризует поддерживаемые литералы.
      *
-     * <p>Участки между директивами</p>
-     *
-     * <pre>
-     * /* @parameterize:off *&#47;
-     * ...
-     * /* @parameterize:on *&#47;
-     * </pre>
-     *
-     * <p>сохраняются без изменений.</p>
-     *
      * @param sql исходный SQL
      *
      * @return SQL с JDBC-параметрами и значения
@@ -108,9 +136,15 @@ public final class SqlLiteralParameterizer {
      *         если sql равен null
      *
      * @throws IllegalArgumentException
-     *         если найден незакрытый поддерживаемый
-     *         строковый литерал или нарушена
-     *         последовательность директив
+     *         если найден некорректный или незакрытый
+     *         поддерживаемый строковый или числовой
+     *         литерал
+     *
+     * @throws IllegalStateException
+     *         если нарушена последовательность
+     *         защитных маркеров, защитный участок
+     *         не закрыт или в одном SQL смешаны
+     *         два синтаксиса защиты
      */
     public ParameterizedSql parameterize(
             CharSequence sql
@@ -135,8 +169,11 @@ public final class SqlLiteralParameterizer {
         List<Object> parameters =
                 new ArrayList<Object>();
 
-        boolean parameterizationEnabled =
-                true;
+        ProtectionSyntax protectionSyntax =
+                ProtectionSyntax.NONE;
+
+        boolean protectionActive =
+                false;
 
         int protectionStartOffset =
                 -1;
@@ -152,7 +189,7 @@ public final class SqlLiteralParameterizer {
                     token.kind();
 
             /*
-             * Новый читаемый формат:
+             * Читаемый синтаксис:
              *
              *   /* @parameterize:off *\/
              *   /* @parameterize:on  *\/
@@ -163,6 +200,18 @@ public final class SqlLiteralParameterizer {
                     == SqlTokenKind
                     .PREPROCESSOR_DIRECTIVE) {
 
+                if (protectionSyntax
+                        == ProtectionSyntax
+                        .LEGACY_TILDE) {
+
+                    throw mixedProtectionSyntax(
+                            token.range().start()
+                    );
+                }
+
+                protectionSyntax =
+                        ProtectionSyntax.DIRECTIVE;
+
                 ParameterizationDirective directive =
                         parseParameterizationDirective(
                                 token.text(source),
@@ -172,26 +221,26 @@ public final class SqlLiteralParameterizer {
                 if (directive
                         == ParameterizationDirective.OFF) {
 
-                    if (!parameterizationEnabled) {
+                    if (protectionActive) {
                         throw nestedParameterizationOff(
                                 token.range().start()
                         );
                     }
 
-                    parameterizationEnabled =
-                            false;
+                    protectionActive =
+                            true;
 
                     protectionStartOffset =
                             token.range().start();
                 } else {
-                    if (parameterizationEnabled) {
+                    if (!protectionActive) {
                         throw unexpectedParameterizationOn(
                                 token.range().start()
                         );
                     }
 
-                    parameterizationEnabled =
-                            true;
+                    protectionActive =
+                            false;
 
                     protectionStartOffset =
                             -1;
@@ -201,17 +250,29 @@ public final class SqlLiteralParameterizer {
             }
 
             /*
-             * Legacy-формат, используемый в production:
+             * Legacy-синтаксис:
              *
              *   ~ защищённый SQL ~
              *
              * Каждая тильда переключает состояние.
-             * Сами тильды удаляются из итогового SQL.
+             * Тильды удаляются из итогового SQL.
              */
             if (isLegacyParameterizationMarker(
                     token,
                     source
             )) {
+                if (protectionSyntax
+                        == ProtectionSyntax.DIRECTIVE) {
+
+                    throw mixedProtectionSyntax(
+                            token.range().start()
+                    );
+                }
+
+                protectionSyntax =
+                        ProtectionSyntax
+                                .LEGACY_TILDE;
+
                 changes.add(
                         new TextChange(
                                 token.range(),
@@ -219,15 +280,15 @@ public final class SqlLiteralParameterizer {
                         )
                 );
 
-                if (parameterizationEnabled) {
-                    parameterizationEnabled =
-                            false;
+                if (!protectionActive) {
+                    protectionActive =
+                            true;
 
                     protectionStartOffset =
                             token.range().start();
                 } else {
-                    parameterizationEnabled =
-                            true;
+                    protectionActive =
+                            false;
 
                     protectionStartOffset =
                             -1;
@@ -237,13 +298,15 @@ public final class SqlLiteralParameterizer {
             }
 
             /*
-             * Токены внутри защищённого участка остаются
-             * без изменений и не добавляются в parameters.
+             * Токены внутри защищённого участка
+             * остаются без изменений и не добавляются
+             * в список параметров.
              *
-             * Переключатели выше всё равно обрабатываются,
-             * чтобы защищённый участок можно было закрыть.
+             * Защитные маркеры проверяются выше,
+             * поэтому участок может быть корректно
+             * закрыт.
              */
-            if (!parameterizationEnabled) {
+            if (protectionActive) {
                 continue;
             }
 
@@ -292,13 +355,31 @@ public final class SqlLiteralParameterizer {
             }
         }
 
-        /*
-         * Нечётное количество legacy-маркеров либо
-         * @parameterize:off без последующего включения.
-         */
-        if (!parameterizationEnabled) {
-            throw unclosedParameterizationProtection(
-                    protectionStartOffset
+        if (protectionActive) {
+            if (protectionSyntax
+                    == ProtectionSyntax.DIRECTIVE) {
+
+                throw unclosedParameterizationOff(
+                        protectionStartOffset
+                );
+            }
+
+            if (protectionSyntax
+                    == ProtectionSyntax
+                    .LEGACY_TILDE) {
+
+                throw unclosedLegacyProtection(
+                        protectionStartOffset
+                );
+            }
+
+            /*
+             * Внутренний инвариант: активная защита
+             * всегда должна иметь выбранный синтаксис.
+             */
+            throw new IllegalStateException(
+                    "Active parameterization protection "
+                            + "without protection syntax"
             );
         }
 
@@ -903,7 +984,7 @@ public final class SqlLiteralParameterizer {
          * невозможно: PREPROCESSOR_DIRECTIVE создаётся
          * только для двух поддерживаемых команд.
          */
-        throw new IllegalArgumentException(
+        throw new IllegalStateException(
                 "Unsupported preprocessor directive "
                         + "at offset "
                         + offset
@@ -954,33 +1035,33 @@ public final class SqlLiteralParameterizer {
         return character;
     }
 
-    private static IllegalArgumentException
+    private static IllegalStateException
     nestedParameterizationOff(
             int offset
     ) {
-        return new IllegalArgumentException(
+        return new IllegalStateException(
                 "Nested @parameterize:off "
                         + "directive at offset "
                         + offset
         );
     }
 
-    private static IllegalArgumentException
+    private static IllegalStateException
     unexpectedParameterizationOn(
             int offset
     ) {
-        return new IllegalArgumentException(
+        return new IllegalStateException(
                 "Unexpected @parameterize:on "
                         + "directive at offset "
                         + offset
         );
     }
 
-    private static IllegalArgumentException
+    private static IllegalStateException
     unclosedParameterizationOff(
             int offset
     ) {
-        return new IllegalArgumentException(
+        return new IllegalStateException(
                 "Unclosed @parameterize:off "
                         + "directive at offset "
                         + offset
@@ -998,12 +1079,25 @@ public final class SqlLiteralParameterizer {
         );
     }
 
-    private static IllegalArgumentException
-    unclosedParameterizationProtection(
+    private static IllegalStateException
+    unclosedLegacyProtection(
             int offset
     ) {
-        return new IllegalArgumentException(
-                "Unclosed parameterization protection "
+        return new IllegalStateException(
+                "Unclosed legacy parameterization "
+                        + "marker at offset "
+                        + offset
+        );
+    }
+
+    private static IllegalStateException
+    mixedProtectionSyntax(
+            int offset
+    ) {
+        return new IllegalStateException(
+                "Legacy '~' markers and "
+                        + "@parameterize directives "
+                        + "cannot be mixed in one SQL "
                         + "at offset "
                         + offset
         );
