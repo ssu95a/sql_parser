@@ -21,12 +21,21 @@ public final class SelectQueryMap {
     private final TextRange wherePredicateRange;
     private final SqlAnchor whereInsertion;
 
+    /*
+     * Если ORDER BY существует, заполнен orderByItemsRange.
+     * Если ORDER BY отсутствует, заполнен orderByInsertion.
+     */
+    private final TextRange orderByItemsRange;
+    private final SqlAnchor orderByInsertion;
+
     private final List<SqlParameterOccurrence> parameters;
 
     public SelectQueryMap(
             SqlAnchor selectItemInsertion,
             TextRange wherePredicateRange,
             SqlAnchor whereInsertion,
+            TextRange orderByItemsRange,
+            SqlAnchor orderByInsertion,
             List<SqlParameterOccurrence> parameters
     ) {
         this.selectItemInsertion =
@@ -35,24 +44,31 @@ public final class SelectQueryMap {
                         "selectItemInsertion"
                 );
 
-        /*
-         * Должно быть известно либо существующее WHERE,
-         * либо место для вставки нового WHERE.
-         */
-        if ((wherePredicateRange == null)
-                == (whereInsertion == null)) {
+        requireExactlyOne(
+                wherePredicateRange,
+                whereInsertion,
+                "Exactly one of wherePredicateRange "
+                        + "and whereInsertion must be specified"
+        );
 
-            throw new IllegalArgumentException(
-                    "Exactly one of wherePredicateRange "
-                            + "and whereInsertion must be specified"
-            );
-        }
+        requireExactlyOne(
+                orderByItemsRange,
+                orderByInsertion,
+                "Exactly one of orderByItemsRange "
+                        + "and orderByInsertion must be specified"
+        );
 
         this.wherePredicateRange =
                 wherePredicateRange;
 
         this.whereInsertion =
                 whereInsertion;
+
+        this.orderByItemsRange =
+                orderByItemsRange;
+
+        this.orderByInsertion =
+                orderByInsertion;
 
         Objects.requireNonNull(
                 parameters,
@@ -98,7 +114,7 @@ public final class SelectQueryMap {
      * Диапазон предиката существующего внешнего WHERE.
      *
      * <p>Диапазон не включает слово WHERE и trivia
-     * непосредственно после него.</p>
+     * непосредственно после и перед соседними предложениями.</p>
      *
      * @throws IllegalStateException если WHERE отсутствует
      */
@@ -128,9 +144,76 @@ public final class SelectQueryMap {
     }
 
     /**
-     * Все найденные параметры в порядке их появления.
+     * Возвращает true, если внешний SELECT содержит ORDER BY.
+     */
+    public boolean hasOrderBy() {
+        return orderByItemsRange != null;
+    }
+
+    /**
+     * Диапазон элементов существующего внешнего ORDER BY.
+     *
+     * <p>Диапазон не включает слова ORDER BY и trailing trivia.</p>
+     *
+     * <p>Например, для:</p>
+     *
+     * <pre>
+     * order by c1 desc, lower(c2)
+     * </pre>
+     *
+     * <p>диапазон соответствует:</p>
+     *
+     * <pre>
+     * c1 desc, lower(c2)
+     * </pre>
+     *
+     * @throws IllegalStateException если ORDER BY отсутствует
+     */
+    public TextRange orderByItemsRange() {
+        if (!hasOrderBy()) {
+            throw new IllegalStateException(
+                    "ORDER BY is absent"
+            );
+        }
+
+        return orderByItemsRange;
+    }
+
+    /**
+     * Позиция, в которой можно вставить новый ORDER BY.
+     *
+     * @throws IllegalStateException если ORDER BY уже существует
+     */
+    public SqlAnchor orderByInsertion() {
+        if (hasOrderBy()) {
+            throw new IllegalStateException(
+                    "ORDER BY is present"
+            );
+        }
+
+        return orderByInsertion;
+    }
+
+
+
+    /**
+     * Все найденные параметры в порядке появления.
      */
     public List<SqlParameterOccurrence> parameters() {
         return parameters;
+    }
+
+    private static void requireExactlyOne(
+            Object existingClause,
+            Object insertion,
+            String message
+    ) {
+        if ((existingClause == null)
+                == (insertion == null)) {
+
+            throw new IllegalArgumentException(
+                    message
+            );
+        }
     }
 }

@@ -19,8 +19,9 @@ public class SelectQueryMapTest {
                         new SqlAnchor(7),
                         new TextRange(20, 25),
                         null,
-                        Collections
-                                .<SqlParameterOccurrence>emptyList()
+                        null,
+                        new SqlAnchor(40),
+                        noParameters()
                 );
 
         assertTrue(
@@ -40,8 +41,9 @@ public class SelectQueryMapTest {
                         new SqlAnchor(7),
                         null,
                         new SqlAnchor(30),
-                        Collections
-                                .<SqlParameterOccurrence>emptyList()
+                        null,
+                        new SqlAnchor(40),
+                        noParameters()
                 );
 
         assertFalse(
@@ -55,14 +57,59 @@ public class SelectQueryMapTest {
     }
 
     @Test
+    public void representsExistingOrderBy() {
+        SelectQueryMap map =
+                new SelectQueryMap(
+                        new SqlAnchor(7),
+                        null,
+                        new SqlAnchor(20),
+                        new TextRange(30, 40),
+                        null,
+                        noParameters()
+                );
+
+        assertTrue(
+                map.hasOrderBy()
+        );
+
+        assertEquals(
+                new TextRange(30, 40),
+                map.orderByItemsRange()
+        );
+    }
+
+    @Test
+    public void representsMissingOrderBy() {
+        SelectQueryMap map =
+                new SelectQueryMap(
+                        new SqlAnchor(7),
+                        null,
+                        new SqlAnchor(20),
+                        null,
+                        new SqlAnchor(40),
+                        noParameters()
+                );
+
+        assertFalse(
+                map.hasOrderBy()
+        );
+
+        assertEquals(
+                new SqlAnchor(40),
+                map.orderByInsertion()
+        );
+    }
+
+    @Test
     public void rejectsBothWhereRepresentations() {
         try {
             new SelectQueryMap(
                     new SqlAnchor(7),
                     new TextRange(20, 25),
                     new SqlAnchor(30),
-                    Collections
-                            .<SqlParameterOccurrence>emptyList()
+                    null,
+                    new SqlAnchor(40),
+                    noParameters()
             );
 
             fail(
@@ -84,8 +131,9 @@ public class SelectQueryMapTest {
                     new SqlAnchor(7),
                     null,
                     null,
-                    Collections
-                            .<SqlParameterOccurrence>emptyList()
+                    null,
+                    new SqlAnchor(40),
+                    noParameters()
             );
 
             fail(
@@ -100,6 +148,54 @@ public class SelectQueryMapTest {
         }
     }
 
+    @Test
+    public void rejectsBothOrderByRepresentations() {
+        try {
+            new SelectQueryMap(
+                    new SqlAnchor(7),
+                    null,
+                    new SqlAnchor(20),
+                    new TextRange(30, 40),
+                    new SqlAnchor(50),
+                    noParameters()
+            );
+
+            fail(
+                    "Expected invalid ORDER BY state"
+            );
+        } catch (IllegalArgumentException expected) {
+            assertEquals(
+                    "Exactly one of orderByItemsRange "
+                            + "and orderByInsertion must be specified",
+                    expected.getMessage()
+            );
+        }
+    }
+
+    @Test
+    public void rejectsMissingOrderByRepresentations() {
+        try {
+            new SelectQueryMap(
+                    new SqlAnchor(7),
+                    null,
+                    new SqlAnchor(20),
+                    null,
+                    null,
+                    noParameters()
+            );
+
+            fail(
+                    "Expected invalid ORDER BY state"
+            );
+        } catch (IllegalArgumentException expected) {
+            assertEquals(
+                    "Exactly one of orderByItemsRange "
+                            + "and orderByInsertion must be specified",
+                    expected.getMessage()
+            );
+        }
+    }
+
     @Test(expected = IllegalStateException.class)
     public void rejectsWhereRangeRequestWhenWhereIsAbsent() {
         SelectQueryMap map =
@@ -107,8 +203,9 @@ public class SelectQueryMapTest {
                         new SqlAnchor(7),
                         null,
                         new SqlAnchor(30),
-                        Collections
-                                .<SqlParameterOccurrence>emptyList()
+                        null,
+                        new SqlAnchor(40),
+                        noParameters()
                 );
 
         map.wherePredicateRange();
@@ -121,10 +218,46 @@ public class SelectQueryMapTest {
                         new SqlAnchor(7),
                         new TextRange(20, 25),
                         null,
-                        Collections
-                                .<SqlParameterOccurrence>emptyList()
+                        null,
+                        new SqlAnchor(40),
+                        noParameters()
                 );
 
         map.whereInsertion();
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void rejectsOrderByRangeRequestWhenOrderByIsAbsent() {
+        SelectQueryMap map =
+                new SelectQueryMap(
+                        new SqlAnchor(7),
+                        null,
+                        new SqlAnchor(20),
+                        null,
+                        new SqlAnchor(40),
+                        noParameters()
+                );
+
+        map.orderByItemsRange();
+    }
+
+    @Test(expected = IllegalStateException.class)
+    public void rejectsOrderByInsertionRequestWhenOrderByIsPresent() {
+        SelectQueryMap map =
+                new SelectQueryMap(
+                        new SqlAnchor(7),
+                        null,
+                        new SqlAnchor(20),
+                        new TextRange(30, 40),
+                        null,
+                        noParameters()
+                );
+
+        map.orderByInsertion();
+    }
+
+    private static java.util.List<SqlParameterOccurrence>
+    noParameters() {
+        return Collections.emptyList();
     }
 }

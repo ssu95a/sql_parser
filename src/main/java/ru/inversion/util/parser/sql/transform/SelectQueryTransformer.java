@@ -146,4 +146,52 @@ public final class SelectQueryTransformer {
                 )
         );
     }
+
+    public static TextChange prependSelectItem(
+            SelectQueryMap map,
+            String selectItem
+    ) {
+        Objects.requireNonNull(map, "map");
+        Objects.requireNonNull(selectItem, "selectItem");
+
+        if (selectItem.trim().isEmpty()) {
+            throw new IllegalArgumentException(
+                    "selectItem is empty"
+            );
+        }
+
+        return map.selectItemInsertion()
+                .insert(selectItem + ", ");
+    }
+
+    public static List<TextChange> replaceOrInsertOrderBy(
+            SelectQueryMap map,
+            String orderByItems
+    ) {
+        Objects.requireNonNull(map, "map");
+        Objects.requireNonNull(orderByItems, "orderByItems");
+
+        if (orderByItems.trim().isEmpty()) {
+            throw new IllegalArgumentException(
+                    "orderByItems is empty"
+            );
+        }
+
+        String clause =
+                "order by " + orderByItems;
+
+        if (map.hasOrderBy()) {
+            return Collections.singletonList(
+                    new TextChange(
+                            map.orderByClauseRange(),
+                            clause
+                    )
+            );
+        }
+
+        return Collections.singletonList(
+                map.orderByInsertion()
+                        .insert(" " + clause + " ")
+        );
+    }
 }

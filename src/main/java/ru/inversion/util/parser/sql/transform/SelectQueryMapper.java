@@ -48,6 +48,8 @@ public final class SelectQueryMapper {
                 structure.selectItemInsertion,
                 structure.wherePredicateRange,
                 structure.whereInsertion,
+                structure.orderByItemsRange,
+                structure.orderByInsertion,
                 parameters
         );
     }
@@ -87,10 +89,19 @@ public final class SelectQueryMapper {
                         selectIndex + 1
                 );
 
+        OrderByMapping orderByMapping =
+                mapOrderBy(
+                        tokens,
+                        source,
+                        selectIndex + 1
+                );
+
         return new Structure(
                 selectItemInsertion,
                 whereMapping.predicateRange,
-                whereMapping.insertion
+                whereMapping.insertion,
+                orderByMapping.clauseRange,
+                orderByMapping.insertion
         );
     }
 
@@ -296,7 +307,7 @@ public final class SelectQueryMapper {
         }
 
         int predicateEnd =
-                findPredicateEnd(
+                findClauseContentEnd(
                         tokens,
                         predicateStartIndex,
                         boundaryIndex,
@@ -311,10 +322,6 @@ public final class SelectQueryMapper {
         );
     }
 
-    /**
-     * Находит первое верхнеуровневое предложение,
-     * завершающее предикат WHERE.
-     */
     private static int findWhereBoundaryIndex(
             List<Token<SqlTokenKind>> tokens,
             SourceText source,
@@ -360,26 +367,196 @@ public final class SelectQueryMapper {
             }
         }
 
-        /*
-         * Lexer всегда должен вернуть END_OF_FILE.
-         */
+        return tokens.size() - 1;
+    }
+
+    /**
+     * Находит существующий внешний ORDER BY либо позицию
+     * вставки нового ORDER BY.
+     */
+    private static OrderByMapping mapOrderBy(
+            List<Token<SqlTokenKind>> tokens,
+            SourceText source,
+            int startIndex
+    ) {
+        int parenthesisDepth = 0;
+
+        for (int index = startIndex;
+             index < tokens.size();
+             index++) {
+
+            Token<SqlTokenKind> token =
+                    tokens.get(index);
+
+            SqlTokenKind kind =
+                    token.kind();
+
+            if (kind
+                    == SqlTokenKind.LEFT_PARENTHESIS) {
+
+                parenthesisDepth++;
+                continue;
+            }
+
+            if (kind
+                    == SqlTokenKind.RIGHT_PARENTHESIS) {
+
+                if (parenthesisDepth > 0) {
+                    parenthesisDepth--;
+                }
+
+                continue;
+            }
+
+            if (parenthesisDepth != 0) {
+                continue;
+            }
+
+            if (isOrderBy(
+                    tokens,
+                    source,
+                    index
+            )) {
+                return mapExistingOrderBy(
+                        tokens,
+                        source,
+                        index
+                );
+            }
+
+            if (isOrderByBoundary(
+                    token,
+                    source
+            )) {
+                return OrderByMapping.absent(
+                        token.range().start()
+                );
+            }
+        }
+
+        return OrderByMapping.absent(
+                source.length()
+        );
+    }
+
+    private static OrderByMapping mapExistingOrderBy(
+            List<Token<SqlTokenKind>> tokens,
+            SourceText source,
+            int orderIndex
+    ) {
+        int byIndex =
+                nextNonTriviaTokenIndex(
+                        tokens,
+                        orderIndex + 1
+                );
+
+        int itemsStartIndex =
+                nextNonTriviaTokenIndex(
+                        tokens,
+                        byIndex + 1
+                );
+
+        int boundaryIndex =
+                findOrderByBoundaryIndex(
+                        tokens,
+                        source,
+                        itemsStartIndex
+                );
+
+        int boundaryOffset =
+                tokens.get(boundaryIndex)
+                        .range()
+                        .start();
+
+        int itemsStart;
+
+        if (itemsStartIndex >= boundaryIndex) {
+            itemsStart =
+                    boundaryOffset;
+        } else {
+            itemsStart =
+                    tokens.get(itemsStartIndex)
+                            .range()
+                            .start();
+        }
+
+        int itemsEnd =
+                findClauseContentEnd(
+                        tokens,
+                        itemsStartIndex,
+                        boundaryIndex,
+                        boundaryOffset
+                );
+
+        return OrderByMapping.present(
+                new TextRange(
+                        itemsStart,
+                        itemsEnd
+                )
+        );
+    }
+
+    private static int findOrderByBoundaryIndex(
+            List<Token<SqlTokenKind>> tokens,
+            SourceText source,
+            int startIndex
+    ) {
+        int parenthesisDepth = 0;
+
+        for (int index = startIndex;
+             index < tokens.size();
+             index++) {
+
+            Token<SqlTokenKind> token =
+                    tokens.get(index);
+
+            SqlTokenKind kind =
+                    token.kind();
+
+            if (kind
+                    == SqlTokenKind.LEFT_PARENTHESIS) {
+
+                parenthesisDepth++;
+                continue;
+            }
+
+            if (kind
+                    == SqlTokenKind.RIGHT_PARENTHESIS) {
+
+                if (parenthesisDepth > 0) {
+                    parenthesisDepth--;
+                }
+
+                continue;
+            }
+
+            if (parenthesisDepth == 0
+                    && isOrderByBoundary(
+                    token,
+                    source
+            )) {
+
+                return index;
+            }
+        }
+
         return tokens.size() - 1;
     }
 
     /**
      * Убирает trivia непосредственно перед следующим
-     * предложением из диапазона предиката.
+     * предложением из диапазона содержимого предложения.
      */
-    private static int findPredicateEnd(
+    private static int findClauseContentEnd(
             List<Token<SqlTokenKind>> tokens,
-            int predicateStartIndex,
+            int contentStartIndex,
             int boundaryIndex,
             int boundaryOffset
     ) {
         int index =
                 boundaryIndex - 1;
 
-        while (index >= predicateStartIndex
+        while (index >= contentStartIndex
                 && tokens.get(index)
                 .kind()
                 .isTrivia()) {
@@ -387,7 +564,7 @@ public final class SelectQueryMapper {
             index--;
         }
 
-        if (index < predicateStartIndex) {
+        if (index < contentStartIndex) {
             return boundaryOffset;
         }
 
@@ -434,16 +611,51 @@ public final class SelectQueryMapper {
             );
         }
 
-        if (isWord(token, source, "order")) {
-            return isFollowingWord(
-                    tokens,
-                    source,
-                    index,
-                    "by"
-            );
+        return isOrderBy(
+                tokens,
+                source,
+                index
+        );
+    }
+
+    /**
+     * Граница содержимого ORDER BY либо место вставки
+     * нового ORDER BY.
+     */
+    private static boolean isOrderByBoundary(
+            Token<SqlTokenKind> token,
+            SourceText source
+    ) {
+        SqlTokenKind kind =
+                token.kind();
+
+        if (kind == SqlTokenKind.SEMICOLON
+                || kind == SqlTokenKind.END_OF_FILE) {
+
+            return true;
         }
 
-        return false;
+        return isWord(token, source, "limit")
+                || isWord(token, source, "offset")
+                || isWord(token, source, "fetch")
+                || isWord(token, source, "for");
+    }
+
+    private static boolean isOrderBy(
+            List<Token<SqlTokenKind>> tokens,
+            SourceText source,
+            int index
+    ) {
+        return isWord(
+                tokens.get(index),
+                source,
+                "order"
+        ) && isFollowingWord(
+                tokens,
+                source,
+                index,
+                "by"
+        );
     }
 
     private static boolean isFollowingWord(
@@ -544,13 +756,19 @@ public final class SelectQueryMapper {
     private static final class Structure {
 
         private final SqlAnchor selectItemInsertion;
+
         private final TextRange wherePredicateRange;
         private final SqlAnchor whereInsertion;
+
+        private final TextRange orderByClauseRange;
+        private final SqlAnchor orderByInsertion;
 
         private Structure(
                 SqlAnchor selectItemInsertion,
                 TextRange wherePredicateRange,
-                SqlAnchor whereInsertion
+                SqlAnchor whereInsertion,
+                TextRange orderByClauseRange,
+                SqlAnchor orderByInsertion
         ) {
             this.selectItemInsertion =
                     selectItemInsertion;
@@ -560,6 +778,12 @@ public final class SelectQueryMapper {
 
             this.whereInsertion =
                     whereInsertion;
+
+            this.orderByClauseRange =
+                    orderByClauseRange;
+
+            this.orderByInsertion =
+                    orderByInsertion;
         }
     }
 
@@ -592,6 +816,41 @@ public final class SelectQueryMapper {
                 int insertionOffset
         ) {
             return new WhereMapping(
+                    null,
+                    new SqlAnchor(insertionOffset)
+            );
+        }
+    }
+
+    private static final class OrderByMapping {
+
+        private final TextRange itemsRange;
+        private final SqlAnchor insertion;
+
+        private OrderByMapping(
+                TextRange itemsRange,
+                SqlAnchor insertion
+        ) {
+            this.itemsRange =
+                    itemsRange;
+
+            this.insertion =
+                    insertion;
+        }
+
+        private static OrderByMapping present(
+                TextRange itemsRange
+        ) {
+            return new OrderByMapping(
+                    itemsRange,
+                    null
+            );
+        }
+
+        private static OrderByMapping absent(
+                int insertionOffset
+        ) {
+            return new OrderByMapping(
                     null,
                     new SqlAnchor(insertionOffset)
             );
