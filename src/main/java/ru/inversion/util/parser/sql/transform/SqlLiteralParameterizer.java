@@ -77,7 +77,7 @@ import java.util.Objects;
  * <p>Legacy-маркеры и директивы нельзя использовать
  * одновременно в одном SQL.</p>
  *
- * <p>Список {@link PreparedSql#parameters()}
+ * <p>{@link ParameterizedSql#parameters()}
  * содержит только значения литералов, заменённых
  * этим проходом. Значения уже существующих
  * параметров в него не входят.</p>
@@ -141,7 +141,7 @@ public final class SqlLiteralParameterizer {
      *         не закрыт или в одном SQL смешаны
      *         два синтаксиса защиты
      */
-    public PreparedSql parameterize(
+    public ParameterizedSql  parameterize(
             CharSequence sql
     ) {
         Objects.requireNonNull(
@@ -384,7 +384,7 @@ public final class SqlLiteralParameterizer {
                         changes
                 );
 
-        return new PreparedSql(
+        return new ParameterizedSql (
                 parameterizedSql,
                 parameters
         );
