@@ -4,341 +4,106 @@ import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-public class ParameterizedSqlTest  {
+public class ParameterizedSqlTestgit add src/test/java/ru/inversion/util/parser/sql/transform/ParameterizedSqlTest.java {
 
     @Test
-    public void storesSqlAndBindingsInJdbcOrder() {
-        SqlParameterBinding first =
-                SqlParameterBinding.jdbcPositional(
-                        1,
-                        1
-                );
-
-        SqlParameterBinding second =
-                SqlParameterBinding.generatedLiteral(
-                        2,
-                        "ACTIVE"
-                );
-
-        PreparedSql result =
-                new PreparedSql(
-                        "select * from t "
-                                + "where id = ? "
-                                + "and status = ?",
-                        Arrays.asList(
-                                first,
-                                second
-                        )
+    public void storesSqlAndParameters() {
+        ParameterizedSql result =
+                new ParameterizedSql(
+                        "select * from t where id = ?",
+                        Arrays.<Object>asList(10)
                 );
 
         assertEquals(
-                "select * from t "
-                        + "where id = ? "
-                        + "and status = ?",
+                "select * from t where id = ?",
                 result.sql()
         );
 
         assertEquals(
-                2,
-                result.bindings().size()
-        );
-
-        assertSame(
-                first,
-                result.bindings().get(0)
-        );
-
-        assertSame(
-                second,
-                result.bindings().get(1)
+                Arrays.<Object>asList(10),
+                result.parameters()
         );
     }
 
     @Test
-    public void copiesBindingList() {
-        List<SqlParameterBinding> bindings =
-                new ArrayList<SqlParameterBinding>();
+    public void copiesParameterList() {
+        List<Object> parameters =
+                new ArrayList<Object>();
 
-        bindings.add(
-                SqlParameterBinding.generatedLiteral(
-                        1,
-                        "ACTIVE"
-                )
-        );
+        parameters.add(10);
 
-        PreparedSql result =
-                new PreparedSql(
+        ParameterizedSql result =
+                new ParameterizedSql(
                         "select ?",
-                        bindings
+                        parameters
                 );
 
-        bindings.add(
-                SqlParameterBinding.generatedLiteral(
-                        2,
-                        "DELETED"
-                )
-        );
+        parameters.add(20);
 
         assertEquals(
-                1,
-                result.bindings().size()
+                Arrays.<Object>asList(10),
+                result.parameters()
         );
     }
 
     @Test
-    public void exposesImmutableBindingList() {
-        PreparedSql result =
-                new PreparedSql(
+    public void exposesImmutableParameterList() {
+        ParameterizedSql result =
+                new ParameterizedSql(
                         "select ?",
-                        Collections.singletonList(
-                                SqlParameterBinding
-                                        .generatedLiteral(
-                                                1,
-                                                "ACTIVE"
-                                        )
-                        )
+                        Arrays.<Object>asList(10)
                 );
 
         try {
-            result.bindings().add(
-                    SqlParameterBinding.generatedLiteral(
-                            2,
-                            "DELETED"
-                    )
-            );
+            result.parameters().add(20);
 
             fail(
-                    "Expected immutable binding list"
+                    "Expected immutable parameter list"
             );
         } catch (UnsupportedOperationException expected) {
             // Expected.
         }
-    }
-
-    @Test
-    public void mapsRepeatedNamedParameterToAllPositions() {
-        PreparedSql result =
-                new PreparedSql(
-                        "select * from t "
-                                + "where manager_id = ? "
-                                + "and status = ? "
-                                + "and owner_id = ?",
-                        Arrays.asList(
-                                SqlParameterBinding.named(
-                                        1,
-                                        "userId"
-                                ),
-                                SqlParameterBinding
-                                        .generatedLiteral(
-                                                2,
-                                                "ACTIVE"
-                                        ),
-                                SqlParameterBinding.named(
-                                        3,
-                                        "userId"
-                                )
-                        )
-                );
-
-        assertEquals(
-                Arrays.asList(1, 3),
-                result.positionsOf("userId")
-        );
-
-        assertEquals(
-                Arrays.asList(1, 3),
-                result.namedPositions()
-                        .get("userId")
-        );
-    }
-
-    @Test
-    public void preservesNamedParameterOrder() {
-        PreparedSql result =
-                new PreparedSql(
-                        "select ?, ?, ?",
-                        Arrays.asList(
-                                SqlParameterBinding.named(
-                                        1,
-                                        "second"
-                                ),
-                                SqlParameterBinding.named(
-                                        2,
-                                        "first"
-                                ),
-                                SqlParameterBinding.named(
-                                        3,
-                                        "second"
-                                )
-                        )
-                );
-
-        List<String> names =
-                new ArrayList<String>(
-                        result.namedPositions()
-                                .keySet()
-                );
-
-        assertEquals(
-                Arrays.asList(
-                        "second",
-                        "first"
-                ),
-                names
-        );
-    }
-
-    @Test
-    public void exposesImmutableNamedPositionMap() {
-        PreparedSql result =
-                new PreparedSql(
-                        "select ?",
-                        Collections.singletonList(
-                                SqlParameterBinding.named(
-                                        1,
-                                        "userId"
-                                )
-                        )
-                );
-
-        Map<String, List<Integer>> positions =
-                result.namedPositions();
-
-        try {
-            positions.put(
-                    "other",
-                    Collections.singletonList(2)
-            );
-
-            fail(
-                    "Expected immutable named position map"
-            );
-        } catch (UnsupportedOperationException expected) {
-            // Expected.
-        }
-    }
-
-    @Test
-    public void exposesImmutableNamedPositionList() {
-        PreparedSql result =
-                new PreparedSql(
-                        "select ?",
-                        Collections.singletonList(
-                                SqlParameterBinding.named(
-                                        1,
-                                        "userId"
-                                )
-                        )
-                );
-
-        try {
-            result.positionsOf("userId")
-                    .add(2);
-
-            fail(
-                    "Expected immutable position list"
-            );
-        } catch (UnsupportedOperationException expected) {
-            // Expected.
-        }
-    }
-
-    @Test
-    public void returnsEmptyPositionsForUnknownName() {
-        PreparedSql result =
-                new PreparedSql(
-                        "select ?",
-                        Collections.singletonList(
-                                SqlParameterBinding.named(
-                                        1,
-                                        "userId"
-                                )
-                        )
-                );
-
-        assertTrue(
-                result.positionsOf("unknown")
-                        .isEmpty()
-        );
-    }
-
-    @Test
-    public void rejectsNonSequentialJdbcPositions() {
-        try {
-            new PreparedSql(
-                    "select ?",
-                    Collections.singletonList(
-                            SqlParameterBinding.named(
-                                    2,
-                                    "userId"
-                            )
-                    )
-            );
-
-            fail(
-                    "Expected non-sequential JDBC "
-                            + "position to be rejected"
-            );
-        } catch (IllegalArgumentException expected) {
-            assertEquals(
-                    "Expected JDBC position 1, actual 2",
-                    expected.getMessage()
-            );
-        }
-    }
-
-    @Test
-    public void allowsEmptyBindingList() {
-        PreparedSql result =
-                new PreparedSql(
-                        "select current_timestamp",
-                        Collections
-                                .<SqlParameterBinding>emptyList()
-                );
-
-        assertTrue(
-                result.bindings().isEmpty()
-        );
-
-        assertTrue(
-                result.namedPositions().isEmpty()
-        );
     }
 
     @Test(expected = NullPointerException.class)
     public void rejectsNullSql() {
-        new PreparedSql(
+        new ParameterizedSql(
                 null,
-                Collections
-                        .<SqlParameterBinding>emptyList()
+                Arrays.<Object>asList(10)
         );
     }
 
     @Test(expected = NullPointerException.class)
-    public void rejectsNullBindingList() {
-        new PreparedSql(
-                "select 1",
+    public void rejectsNullParameterList() {
+        new ParameterizedSql(
+                "select ?",
                 null
         );
     }
 
-    @Test(expected = NullPointerException.class)
-    public void rejectsNullBinding() {
-        new PreparedSql(
-                "select ?",
-                Collections
-                        .<SqlParameterBinding>singletonList(
-                                null
+    @Test
+    public void allowsNullParameterValue() {
+        ParameterizedSql result =
+                new ParameterizedSql(
+                        "select ?",
+                        Arrays.<Object>asList(
+                                (Object) null
                         )
+                );
+
+        assertEquals(
+                1,
+                result.parameters().size()
+        );
+
+        assertEquals(
+                null,
+                result.parameters().get(0)
         );
     }
 }
