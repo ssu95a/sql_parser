@@ -1070,7 +1070,7 @@ public class SqlLiteralParameterizerTest {
                     "Expected unexpected on directive "
                             + "to be rejected"
             );
-        } catch (IllegalArgumentException expected) {
+        } catch (IllegalStateException expected) {
             assertEquals(
                     "Unexpected @parameterize:on "
                             + "directive at offset "
@@ -1102,7 +1102,7 @@ public class SqlLiteralParameterizerTest {
                     "Expected nested off directive "
                             + "to be rejected"
             );
-        } catch (IllegalArgumentException expected) {
+        } catch (IllegalStateException expected) {
             assertEquals(
                     "Nested @parameterize:off "
                             + "directive at offset "
@@ -1131,7 +1131,7 @@ public class SqlLiteralParameterizerTest {
                     "Expected unclosed off directive "
                             + "to be rejected"
             );
-        } catch (IllegalArgumentException expected) {
+        } catch (IllegalStateException expected) {
             assertEquals(
                     "Unclosed @parameterize:off "
                             + "directive at offset "

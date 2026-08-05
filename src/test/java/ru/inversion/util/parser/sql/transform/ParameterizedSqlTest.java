@@ -9,7 +9,7 @@ import java.util.List;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
-public class ParameterizedSqlTestgit add src/test/java/ru/inversion/util/parser/sql/transform/ParameterizedSqlTest.java {
+public class ParameterizedSqlTest {
 
     @Test
     public void storesSqlAndParameters() {

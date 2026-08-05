@@ -165,7 +165,7 @@ public class SelectQueryMapTest {
             );
         } catch (IllegalArgumentException expected) {
             assertEquals(
-                    "Exactly one of orderByItemsRange "
+                    "Exactly one of orderByClauseRange "
                             + "and orderByInsertion must be specified",
                     expected.getMessage()
             );
@@ -189,7 +189,7 @@ public class SelectQueryMapTest {
             );
         } catch (IllegalArgumentException expected) {
             assertEquals(
-                    "Exactly one of orderByItemsRange "
+                    "Exactly one of orderByClauseRange "
                             + "and orderByInsertion must be specified",
                     expected.getMessage()
             );
