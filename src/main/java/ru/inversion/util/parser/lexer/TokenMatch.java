@@ -12,7 +12,7 @@ public final class TokenMatch<K extends TokenKind> {
     private final int endOffset;
 
     public TokenMatch(K kind, int endOffset) {
-        this.kind = Objects.requireNonNull(kind, "kind");
+        this.kind      = Objects.requireNonNull(kind, "kind");
         this.endOffset = endOffset;
     }
 

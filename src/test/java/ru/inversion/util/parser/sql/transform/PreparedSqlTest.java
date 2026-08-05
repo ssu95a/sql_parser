@@ -9,12 +9,12 @@ import java.util.List;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
-public class ParameterizedSqlTest {
+public class PreparedSqlTest {
 
     @Test
     public void storesSqlAndParameters() {
-        ParameterizedSql result =
-                new ParameterizedSql(
+        PreparedSql result =
+                new PreparedSql(
                         "select * from t where id = ?",
                         Arrays.<Object>asList(10)
                 );
@@ -37,8 +37,8 @@ public class ParameterizedSqlTest {
 
         parameters.add(10);
 
-        ParameterizedSql result =
-                new ParameterizedSql(
+        PreparedSql result =
+                new PreparedSql(
                         "select ?",
                         parameters
                 );
@@ -53,8 +53,8 @@ public class ParameterizedSqlTest {
 
     @Test
     public void exposesImmutableParameterList() {
-        ParameterizedSql result =
-                new ParameterizedSql(
+        PreparedSql result =
+                new PreparedSql(
                         "select ?",
                         Arrays.<Object>asList(10)
                 );
@@ -72,7 +72,7 @@ public class ParameterizedSqlTest {
 
     @Test(expected = NullPointerException.class)
     public void rejectsNullSql() {
-        new ParameterizedSql(
+        new PreparedSql(
                 null,
                 Arrays.<Object>asList(10)
         );
@@ -80,7 +80,7 @@ public class ParameterizedSqlTest {
 
     @Test(expected = NullPointerException.class)
     public void rejectsNullParameterList() {
-        new ParameterizedSql(
+        new PreparedSql(
                 "select ?",
                 null
         );
@@ -88,8 +88,8 @@ public class ParameterizedSqlTest {
 
     @Test
     public void allowsNullParameterValue() {
-        ParameterizedSql result =
-                new ParameterizedSql(
+        PreparedSql result =
+                new PreparedSql(
                         "select ?",
                         Arrays.<Object>asList(
                                 (Object) null

@@ -18,8 +18,7 @@ import java.util.Objects;
  */
 public final class SelectQueryTransformer {
 
-    private SelectQueryTransformer() {
-    }
+    private SelectQueryTransformer() { }
 
     /**
      * Усиливает существующий WHERE новым предикатом
@@ -55,10 +54,8 @@ public final class SelectQueryTransformer {
      *         если predicate пуст либо существующий
      *         WHERE не содержит предикат
      */
-    public static List<TextChange> strengthenWhere(
-            SelectQueryMap map,
-            String predicate
-    ) {
+    public static List<TextChange> strengthenWhere( SelectQueryMap map, String predicate )
+    {
         Objects.requireNonNull(
                 map,
                 "map"
@@ -89,21 +86,16 @@ public final class SelectQueryTransformer {
     }
 
     /**
-     * Обрамляет существующий предикат двумя вставками.
-     *
-     * <p>Исходный предикат не копируется и не собирается
+     * <h6>Обрамляет существующий предикат двумя вставками.</h6>
+     * <p>
+     * Исходный предикат не копируется и не собирается
      * заново, поэтому его форматирование и комментарии
-     * сохраняются без изменений.</p>
+     * сохраняются без изменений.
      */
-    private static List<TextChange> strengthenExistingWhere(
-            TextRange predicateRange,
-            String predicate
-    ) {
-        if (predicateRange.isEmpty()) {
-            throw new IllegalArgumentException(
-                    "Existing WHERE predicate is empty"
-            );
-        }
+    private static List<TextChange> strengthenExistingWhere( TextRange predicateRange, String predicate )
+    {
+        if( predicateRange.isEmpty() )
+            throw new IllegalArgumentException( "Existing WHERE predicate is empty" );
 
         TextChange openParenthesis =
                 new TextChange(

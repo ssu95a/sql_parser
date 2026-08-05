@@ -26,7 +26,7 @@ public class SqlLiteralParameterizerTest {
 
     @Test
     public void returnsUnchangedSqlWhenLiteralsAreAbsent() {
-        ParameterizedSql result =
+        PreparedSql result =
                 parameterizer.parameterize(
                         "select c1 from t"
                 );
@@ -43,7 +43,7 @@ public class SqlLiteralParameterizerTest {
 
     @Test
     public void parameterizesStringLiteral() {
-        ParameterizedSql result =
+        PreparedSql result =
                 parameterizer.parameterize(
                         "select 'text' from t"
                 );
@@ -63,7 +63,7 @@ public class SqlLiteralParameterizerTest {
 
     @Test
     public void parameterizesEmptyStringLiteral() {
-        ParameterizedSql result =
+        PreparedSql result =
                 parameterizer.parameterize(
                         "select '' from t"
                 );
@@ -83,7 +83,7 @@ public class SqlLiteralParameterizerTest {
 
     @Test
     public void decodesEscapedSingleQuote() {
-        ParameterizedSql result =
+        PreparedSql result =
                 parameterizer.parameterize(
                         "select 'John''s car' from t"
                 );
@@ -103,7 +103,7 @@ public class SqlLiteralParameterizerTest {
 
     @Test
     public void parameterizesIntegerLiteral() {
-        ParameterizedSql result =
+        PreparedSql result =
                 parameterizer.parameterize(
                         "select 123 from t"
                 );
@@ -123,7 +123,7 @@ public class SqlLiteralParameterizerTest {
 
     @Test
     public void preservesArbitrarilyLargeInteger() {
-        ParameterizedSql result =
+        PreparedSql result =
                 parameterizer.parameterize(
                         "select 123456789012345678901234567890"
                 );
@@ -145,7 +145,7 @@ public class SqlLiteralParameterizerTest {
 
     @Test
     public void parameterizesDecimalLiteral() {
-        ParameterizedSql result =
+        PreparedSql result =
                 parameterizer.parameterize(
                         "select 123.45 from t"
                 );
@@ -165,7 +165,7 @@ public class SqlLiteralParameterizerTest {
 
     @Test
     public void parameterizesDecimalWithoutIntegerPart() {
-        ParameterizedSql result =
+        PreparedSql result =
                 parameterizer.parameterize(
                         "select .45 from t"
                 );
@@ -185,7 +185,7 @@ public class SqlLiteralParameterizerTest {
 
     @Test
     public void parameterizesDecimalWithoutFractionPart() {
-        ParameterizedSql result =
+        PreparedSql result =
                 parameterizer.parameterize(
                         "select 123. from t"
                 );
@@ -205,7 +205,7 @@ public class SqlLiteralParameterizerTest {
 
     @Test
     public void preservesLiteralOrder() {
-        ParameterizedSql result =
+        PreparedSql result =
                 parameterizer.parameterize(
                         "select 'first', 10, 'second', 20.5"
                 );
@@ -228,7 +228,7 @@ public class SqlLiteralParameterizerTest {
 
     @Test
     public void keepsUnaryMinusOutsideParameter() {
-        ParameterizedSql result =
+        PreparedSql result =
                 parameterizer.parameterize(
                         "select -10, +2.5"
                 );
@@ -249,7 +249,7 @@ public class SqlLiteralParameterizerTest {
 
     @Test
     public void preservesExistingParameters() {
-        ParameterizedSql result =
+        PreparedSql result =
                 parameterizer.parameterize(
                         "select ?, :name, $1, 'text', 10"
                 );
@@ -270,7 +270,7 @@ public class SqlLiteralParameterizerTest {
 
     @Test
     public void ignoresQuotedIdentifier() {
-        ParameterizedSql result =
+        PreparedSql result =
                 parameterizer.parameterize(
                         "select \"123\", \"'text'\", 10"
                 );
@@ -296,7 +296,7 @@ public class SqlLiteralParameterizerTest {
                         + "from t "
                         + "/* 'block text' 30 */";
 
-        ParameterizedSql result =
+        PreparedSql result =
                 parameterizer.parameterize(sql);
 
         assertEquals(
@@ -324,7 +324,7 @@ public class SqlLiteralParameterizerTest {
                         + "    10      as number\n"
                         + "from t";
 
-        ParameterizedSql result =
+        PreparedSql result =
                 parameterizer.parameterize(sql);
 
         assertEquals(
@@ -338,7 +338,7 @@ public class SqlLiteralParameterizerTest {
 
     @Test
     public void parameterizesLiteralsAtAnyParenthesisDepth() {
-        ParameterizedSql result =
+        PreparedSql result =
                 parameterizer.parameterize(
                         "select * from t "
                                 + "where id in ("
@@ -376,7 +376,7 @@ public class SqlLiteralParameterizerTest {
                         + "q'[oracle]', "
                         + "U&'unicode'";
 
-        ParameterizedSql result =
+        PreparedSql result =
                 parameterizer.parameterize(sql);
 
         assertEquals(
@@ -397,7 +397,7 @@ public class SqlLiteralParameterizerTest {
                         + "timestamp '2026-08-04 12:30:00', "
                         + "interval '1 day'";
 
-        ParameterizedSql result =
+        PreparedSql result =
                 parameterizer.parameterize(sql);
 
         assertEquals(
@@ -415,7 +415,7 @@ public class SqlLiteralParameterizerTest {
         String sql =
                 "select date /* type comment */ '2026-08-04'";
 
-        ParameterizedSql result =
+        PreparedSql result =
                 parameterizer.parameterize(sql);
 
         assertEquals(
@@ -433,7 +433,7 @@ public class SqlLiteralParameterizerTest {
         String sql =
                 "select 1e3, 0xFF, 1_000, :1";
 
-        ParameterizedSql result =
+        PreparedSql result =
                 parameterizer.parameterize(sql);
 
         assertEquals(
@@ -479,7 +479,7 @@ public class SqlLiteralParameterizerTest {
                         POSTGRES
                 );
 
-        ParameterizedSql result =
+        PreparedSql result =
                 postgres.parameterize(
                         "select $$text$$ from t"
                 );
@@ -504,7 +504,7 @@ public class SqlLiteralParameterizerTest {
                         POSTGRES
                 );
 
-        ParameterizedSql result =
+        PreparedSql result =
                 postgres.parameterize(
                         "select $body$John's car$body$"
                 );
@@ -532,7 +532,7 @@ public class SqlLiteralParameterizerTest {
         String sql =
                 "select q'[oracle text]'";
 
-        ParameterizedSql result =
+        PreparedSql result =
                 postgres.parameterize(sql);
 
         assertEquals(
@@ -552,7 +552,7 @@ public class SqlLiteralParameterizerTest {
                         ORACLE
                 );
 
-        ParameterizedSql result =
+        PreparedSql result =
                 oracle.parameterize(
                         "select q'[text]' from dual"
                 );
@@ -577,7 +577,7 @@ public class SqlLiteralParameterizerTest {
                         ORACLE
                 );
 
-        ParameterizedSql result =
+        PreparedSql result =
                 oracle.parameterize(
                         "select q'!John's car!' from dual"
                 );
@@ -605,7 +605,7 @@ public class SqlLiteralParameterizerTest {
         String sql =
                 "select $$postgres text$$ from dual";
 
-        ParameterizedSql result =
+        PreparedSql result =
                 oracle.parameterize(sql);
 
         assertEquals(
@@ -623,7 +623,7 @@ public class SqlLiteralParameterizerTest {
         String sql =
                 "select $$postgres$$, q'[oracle]'";
 
-        ParameterizedSql result =
+        PreparedSql result =
                 parameterizer.parameterize(sql);
 
         assertEquals(
@@ -648,12 +648,12 @@ public class SqlLiteralParameterizerTest {
                         ORACLE
                 );
 
-        ParameterizedSql postgresResult =
+        PreparedSql postgresResult =
                 postgres.parameterize(
                         "select 'text'"
                 );
 
-        ParameterizedSql oracleResult =
+        PreparedSql oracleResult =
                 oracle.parameterize(
                         "select 'text'"
                 );
@@ -690,7 +690,7 @@ public class SqlLiteralParameterizerTest {
                         POSTGRES
                 );
 
-        ParameterizedSql result =
+        PreparedSql result =
                 postgres.parameterize(
                         "select 'first', "
                                 + "$body$second$body$, "
@@ -721,7 +721,7 @@ public class SqlLiteralParameterizerTest {
                         ORACLE
                 );
 
-        ParameterizedSql result =
+        PreparedSql result =
                 oracle.parameterize(
                         "select 'first', "
                                 + "q'[second]', "
@@ -806,12 +806,12 @@ public class SqlLiteralParameterizerTest {
         String oracleSql =
                 "select q'[unterminated";
 
-        ParameterizedSql nonePostgresResult =
+        PreparedSql nonePostgresResult =
                 parameterizer.parameterize(
                         postgresSql
                 );
 
-        ParameterizedSql noneOracleResult =
+        PreparedSql noneOracleResult =
                 parameterizer.parameterize(
                         oracleSql
                 );
@@ -836,7 +836,7 @@ public class SqlLiteralParameterizerTest {
                         + "/* @parameterize:on */, "
                         + "'after', 30";
 
-        ParameterizedSql result =
+        PreparedSql result =
                 parameterizer.parameterize(sql);
 
         assertEquals(
@@ -869,7 +869,7 @@ public class SqlLiteralParameterizerTest {
                         + "/* @Parameterize : On */, "
                         + "'after'";
 
-        ParameterizedSql result =
+        PreparedSql result =
                 parameterizer.parameterize(sql);
 
         assertEquals(
@@ -906,7 +906,7 @@ public class SqlLiteralParameterizerTest {
                         + "/* @parameterize:on */, "
                         + "20";
 
-        ParameterizedSql result =
+        PreparedSql result =
                 parameterizer.parameterize(sql);
 
         assertEquals(
@@ -941,7 +941,7 @@ public class SqlLiteralParameterizerTest {
                         + "/* @parameterize:on */, "
                         + "'after'";
 
-        ParameterizedSql result =
+        PreparedSql result =
                 parameterizer.parameterize(sql);
 
         assertEquals(
@@ -976,7 +976,7 @@ public class SqlLiteralParameterizerTest {
                         + "/* @parameterize:on */, "
                         + "$$after$$";
 
-        ParameterizedSql result =
+        PreparedSql result =
                 postgres.parameterize(sql);
 
         assertEquals(
@@ -1005,7 +1005,7 @@ public class SqlLiteralParameterizerTest {
                         + "'/* @parameterize:off */', "
                         + "10";
 
-        ParameterizedSql result =
+        PreparedSql result =
                 parameterizer.parameterize(sql);
 
         assertEquals(
@@ -1030,7 +1030,7 @@ public class SqlLiteralParameterizerTest {
                         + "@parameterize:off */ "
                         + "'text', 10";
 
-        ParameterizedSql result =
+        PreparedSql result =
                 parameterizer.parameterize(sql);
 
         assertEquals(
@@ -1149,7 +1149,7 @@ public class SqlLiteralParameterizerTest {
                         + "'outside', 20 "
                         + "from table_name t";
 
-        ParameterizedSql result =
+        PreparedSql result =
                 parameterizer.parameterize(sql);
 
         assertEquals(

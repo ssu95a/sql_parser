@@ -29,12 +29,14 @@ public final class Token<K extends TokenKind> {
         return range;
     }
 
-    public String text(SourceText source)
+    /** */
+    public String text( SourceText source )
     {
         Objects.requireNonNull(source, "source");
         return source.substring( range.start(), range.end() );
     }
 
+    /** */
     @Override
     public String toString() {
         return kind + " " + range;

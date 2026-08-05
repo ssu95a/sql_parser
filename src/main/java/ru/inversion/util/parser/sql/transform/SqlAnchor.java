@@ -17,11 +17,8 @@ public final class SqlAnchor {
     private final int offset;
 
     public SqlAnchor(int offset) {
-        if (offset < 0) {
-            throw new IllegalArgumentException(
-                    "offset < 0: " + offset
-            );
-        }
+        if( offset < 0)
+            throw new IllegalArgumentException( "offset < 0: " + offset );
 
         this.offset = offset;
     }
@@ -37,10 +34,7 @@ public final class SqlAnchor {
      * Возвращает пустой диапазон в позиции якоря.
      */
     public TextRange range() {
-        return new TextRange(
-                offset,
-                offset
-        );
+        return new TextRange( offset, offset );
     }
 
     /**
@@ -48,15 +42,8 @@ public final class SqlAnchor {
      * в позицию якоря.
      */
     public TextChange insert(String text) {
-        Objects.requireNonNull(
-                text,
-                "text"
-        );
-
-        return new TextChange(
-                range(),
-                text
-        );
+        Objects.requireNonNull( text, "text" );
+        return new TextChange( range(), text );
     }
 
     @Override

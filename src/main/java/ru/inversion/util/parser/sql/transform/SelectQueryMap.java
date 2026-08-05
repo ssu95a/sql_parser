@@ -30,74 +30,42 @@ public final class SelectQueryMap {
 
     private final List<SqlParameterOccurrence> parameters;
 
-    public SelectQueryMap(
-            SqlAnchor selectItemInsertion,
-            TextRange wherePredicateRange,
-            SqlAnchor whereInsertion,
-            TextRange orderByClauseRange,
-            SqlAnchor orderByInsertion,
-            List<SqlParameterOccurrence> parameters
-    ) {
-        this.selectItemInsertion =
-                Objects.requireNonNull(
-                        selectItemInsertion,
-                        "selectItemInsertion"
-                );
+    public SelectQueryMap (
+        SqlAnchor selectItemInsertion,
+        TextRange wherePredicateRange,
+        SqlAnchor whereInsertion,
+        TextRange orderByClauseRange,
+        SqlAnchor orderByInsertion,
+        List<SqlParameterOccurrence> parameters
+    )
+    {
+        this.selectItemInsertion = Objects.requireNonNull( selectItemInsertion, "selectItemInsertion" );
 
-        requireExactlyOne(
-                wherePredicateRange,
-                whereInsertion,
-                "Exactly one of wherePredicateRange "
-                        + "and whereInsertion must be specified"
-        );
+        requireExactlyOne( wherePredicateRange, whereInsertion, "Exactly one of wherePredicateRange and whereInsertion must be specified" );
+        requireExactlyOne( orderByClauseRange, orderByInsertion,"Exactly one of orderByClauseRange and orderByInsertion must be specified");
 
-        requireExactlyOne(
-                orderByClauseRange,
-                orderByInsertion,
-                "Exactly one of orderByClauseRange "
-                        + "and orderByInsertion must be specified"
-        );
+        this.wherePredicateRange = wherePredicateRange;
+        this.whereInsertion      = whereInsertion;
 
-        this.wherePredicateRange =
-                wherePredicateRange;
+        this.orderByClauseRange  = orderByClauseRange;
+        this.orderByInsertion    = orderByInsertion;
 
-        this.whereInsertion =
-                whereInsertion;
+        Objects.requireNonNull( parameters, "parameters" );
 
-        this.orderByClauseRange =
-                orderByClauseRange;
+        List<SqlParameterOccurrence> copy = new ArrayList<SqlParameterOccurrence>( parameters.size() );
 
-        this.orderByInsertion =
-                orderByInsertion;
-
-        Objects.requireNonNull(
-                parameters,
-                "parameters"
-        );
-
-        List<SqlParameterOccurrence> copy =
-                new ArrayList<SqlParameterOccurrence>(
-                        parameters.size()
-                );
-
-        for (int index = 0;
-             index < parameters.size();
-             index++) {
-
-            copy.add(
-                    Objects.requireNonNull(
-                            parameters.get(index),
-                            "parameters[" + index + "]"
-                    )
-            );
+        for (int index = 0; index < parameters.size(); index++)
+        {
+            copy.add( Objects.requireNonNull( parameters.get(index), "parameters[" + index + "]" ) );
         }
 
-        this.parameters =
-                Collections.unmodifiableList(copy);
+        this.parameters = Collections.unmodifiableList(copy);
     }
 
     /**
      * Позиция перед первым элементом списка внешнего SELECT.
+     * <p>
+     * Туда вставляется mark-column
      */
     public SqlAnchor selectItemInsertion() {
         return selectItemInsertion;
@@ -225,17 +193,11 @@ public final class SelectQueryMap {
         return parameters;
     }
 
-    private static void requireExactlyOne(
-            Object existingClause,
-            Object insertion,
-            String message
-    ) {
-        if ((existingClause == null)
-                == (insertion == null)) {
-
-            throw new IllegalArgumentException(
-                    message
-            );
+    private static void requireExactlyOne( Object existingClause, Object insertion, String message )
+    {
+        if( (existingClause == null) == (insertion == null) )
+        {
+            throw new IllegalArgumentException( message );
         }
     }
 }

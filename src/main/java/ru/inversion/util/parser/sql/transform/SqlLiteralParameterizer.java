@@ -77,19 +77,18 @@ import java.util.Objects;
  * <p>Legacy-маркеры и директивы нельзя использовать
  * одновременно в одном SQL.</p>
  *
- * <p>Список {@link ParameterizedSql#parameters()}
+ * <p>Список {@link PreparedSql#parameters()}
  * содержит только значения литералов, заменённых
  * этим проходом. Значения уже существующих
  * параметров в него не входят.</p>
  */
 public final class SqlLiteralParameterizer {
 
-    private static final String PARAMETERIZE_OFF_DIRECTIVE =
-            "/*@parameterize:off*/";
+    private static final String PARAMETERIZE_OFF_DIRECTIVE = "/*@parameterize:off*/";
 
-    private static final String PARAMETERIZE_ON_DIRECTIVE =
-            "/*@parameterize:on*/";
+    private static final String PARAMETERIZE_ON_DIRECTIVE = "/*@parameterize:on*/";
 
+    /** */
     private enum ParameterizationDirective {
         OFF,
         ON
@@ -98,7 +97,7 @@ public final class SqlLiteralParameterizer {
     /**
      * Синтаксис защиты, уже обнаруженный
      * в обрабатываемом SQL.
-     *
+     * <p>
      * После выбора синтаксиса переключиться
      * на другой синтаксис нельзя, даже если
      * предыдущий защищённый участок уже закрыт.
@@ -112,17 +111,13 @@ public final class SqlLiteralParameterizer {
     private final SqlLexer lexer;
     private final SqlSyntaxDialect dialect;
 
-    public SqlLiteralParameterizer(
-            SqlSyntaxDialect dialect
-    ) {
-        this.lexer =
-                new SqlLexer();
-
-        this.dialect =
-                Objects.requireNonNull(
-                        dialect,
-                        "dialect"
-                );
+    /** */
+    public SqlLiteralParameterizer (
+        SqlSyntaxDialect dialect
+    )
+    {
+        this.lexer = new SqlLexer();
+        this.dialect = Objects.requireNonNull( dialect, "dialect" );
     }
 
     /**
@@ -146,7 +141,7 @@ public final class SqlLiteralParameterizer {
      *         не закрыт или в одном SQL смешаны
      *         два синтаксиса защиты
      */
-    public ParameterizedSql parameterize(
+    public PreparedSql parameterize(
             CharSequence sql
     ) {
         Objects.requireNonNull(
@@ -389,7 +384,7 @@ public final class SqlLiteralParameterizer {
                         changes
                 );
 
-        return new ParameterizedSql(
+        return new PreparedSql(
                 parameterizedSql,
                 parameters
         );
